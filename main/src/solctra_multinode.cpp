@@ -1,5 +1,3 @@
-#include "solctra_multinode.h"
-#include "utils.h"
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -7,9 +5,10 @@
 #include <fstream>
 #include <iostream>
 #include <mpi.h>
+#include <solctra_multinode.h>
 #include <sstream>
 #include <string>
-
+#include <utils.h>
 
 void printIterationFileTxt(Particles &particles, const int iteration,
                            const int rank, const std::string &output) {

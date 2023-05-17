@@ -3,7 +3,6 @@
 // Created by lchavarr on 4/19/16.
 //
 
-#include "utils.h"
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -16,6 +15,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <utils.h>
 #include <vector>
 
 void loadParticleFile(Particles &particles, const int numberOfParticles,

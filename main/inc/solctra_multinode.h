@@ -1,10 +1,10 @@
 #ifndef SOLCTRA_SOLCTRA_H
 #define SOLCTRA_SOLCTRA_H
 
-#include "utils.h"
 #include <cmath>
 #include <sstream>
 #include <string>
+#include <utils.h>
 
 void printIterationFile(const Particle *particle_array, const int iteration,
                         const std::string &output, const int rank_id,

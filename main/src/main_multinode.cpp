@@ -1,4 +1,3 @@
-#include "solctra_multinode.h"
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -6,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <mpi.h>
+#include <solctra_multinode.h>
 #include <sstream>
 #include <string>
 #include <utils.h>
