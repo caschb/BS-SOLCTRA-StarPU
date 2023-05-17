@@ -4,3 +4,4 @@ build/*
 stdout*
 .cache/*
 stats.csv
+starpu.log

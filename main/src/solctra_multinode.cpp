@@ -1,10 +1,14 @@
+#include <array>
 #include <cmath>
+#include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <mpi.h>
 #include <solctra_multinode.h>
 #include <sstream>
+#include <starpu.h>
 #include <string>
 #include <string_view>
 #include <utils.h>
@@ -134,12 +138,22 @@ bool computeIteration(const Coils &coils, const Coils &e_roof,
   return diverged;
 }
 
+// void iteration_task(void *buffers[], void *cl_args) {
+//   auto task = starpu_task_get_current();
+//   auto coils = starpu_data_get_user_data(task->handles[0]);
+// }
+
 void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
                   const std::string &output, Particles &particles,
                   const int length, const int steps, const double &step_size,
                   const int mode, const int debug_flag) {
   int my_rank, prefix_size, offset;
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+  auto status = starpu_init(nullptr);
+  if (status == -ENODEV) {
+    exit(77);
+  }
 
   int divergenceCounter = 0;
   double totalIOTime = NAN;
@@ -164,7 +178,42 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
   printIterationFileTxt(particles, 0, my_rank, output);
   compStartTime = MPI_Wtime();
 
-  for (int step = 1; step <= steps; ++step) {
+  starpu_data_handle_t coils_dh;
+  starpu_data_handle_t e_roof_dh;
+  starpu_data_handle_t length_segments_dh;
+  starpu_data_handle_t particles_dh;
+  starpu_data_handle_t step_size_dh;
+  starpu_data_handle_t divergence_counter_dh;
+  starpu_data_handle_t rmi_dh;
+  starpu_data_handle_t rmf_dh;
+
+  starpu_vector_data_register(&coils_dh, STARPU_MAIN_RAM,
+                              (uintptr_t)coils.data(), coils.size(),
+                              sizeof(Coil));
+  starpu_vector_data_register(&e_roof_dh, STARPU_MAIN_RAM,
+                              (uintptr_t)e_roof.data(), e_roof.size(),
+                              sizeof(Coil));
+  starpu_vector_data_register(
+      &length_segments_dh, STARPU_MAIN_RAM, (uintptr_t)length_segments.data(),
+      length_segments.size(), sizeof(std::array<double, TOTAL_OF_GRADES + 1>));
+  starpu_vector_data_register(&particles_dh, STARPU_MAIN_RAM,
+                              (uintptr_t)particles.data(), particles.size(),
+                              sizeof(Particle));
+  starpu_vector_data_register(&rmi_dh, STARPU_MAIN_RAM, (uintptr_t)rmi.data(),
+                              rmi.size(), sizeof(Coil));
+  starpu_vector_data_register(&rmf_dh, STARPU_MAIN_RAM, (uintptr_t)rmf.data(),
+                              rmf.size(), sizeof(Coil));
+
+  starpu_variable_data_register(&step_size_dh, STARPU_MAIN_RAM,
+                                (uintptr_t)&step_size, sizeof(step_size));
+  starpu_variable_data_register(&divergence_counter_dh, STARPU_MAIN_RAM,
+                                (uintptr_t)&divergenceCounter,
+                                sizeof(divergenceCounter));
+
+  starpu_codelet cl;
+  starpu_codelet_init(&cl);
+
+  for (auto step = 1; step <= steps; ++step) {
     for (auto &particle : particles) {
       if ((particle.x == MINOR_RADIUS) && (particle.y == MINOR_RADIUS) &&
           (particle.z == MINOR_RADIUS)) {
