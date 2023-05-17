@@ -7,6 +7,7 @@
 #ifndef SOLCTRA_UTILS_H
 #define SOLCTRA_UTILS_H
 
+#include <ostream>
 #define PI 3.141592654
 #define MIU 1.2566e-06
 #define I -4350
@@ -18,19 +19,24 @@
 
 #include <array>
 #include <cmath>
-#include <cstdio>
 #include <iostream>
 #include <mpi.h>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
+#include <limits>
 
 struct Cartesian {
   double x, y, z;
   void print() { std::cout << x << ',' << y << ',' << z << '\n'; }
   Cartesian(double x = 0.0, double y = 0.0, double z = 0.0)
       : x(x), y(y), z(z) {}
+  friend std::ostream &operator<<(std::ostream &os,
+                                  const Cartesian &cartesian) {
+    os << cartesian.x << ',' << cartesian.y << ',' << cartesian.z;
+    return os;
+  }
 };
 
 typedef std::array<Cartesian, TOTAL_OF_GRADES + 1> Coil;

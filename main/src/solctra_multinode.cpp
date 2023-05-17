@@ -1,81 +1,32 @@
-#include <cassert>
 #include <cmath>
-#include <cstdio>
-#include <cstring>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <mpi.h>
 #include <solctra_multinode.h>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utils.h>
 
 void printIterationFileTxt(Particles &particles, const int iteration,
-                           const int rank, const std::string &output) {
-  std::ostringstream convert;
-  convert << iteration;
-  convert << "_";
-  convert << rank;
-  std::string value = convert.str();
-  FILE *handler;
-  std::string file_name = output + "/iteration_" + value + ".txt";
-  handler = fopen(file_name.c_str(), "a");
-  if (nullptr == handler) {
-    std::cout << "Unable to open file=[" << file_name.c_str()
+                           const int rank, const std::string_view output) {
+  constexpr auto max_double_digits = std::numeric_limits<double>::max_digits10;
+  std::ostringstream filename_ss;
+  filename_ss << output << "/iteration_" << iteration << "_" << rank << ".txt";
+  std::ofstream handler(filename_ss.str());
+
+  if (handler.bad()) {
+    std::cerr << "Unable to open file=[" << filename_ss.str()
               << "]. Nothing to do\n";
-    exit(0);
+    exit(-1);
   }
-  fprintf(handler, "x,y,z\n");
+  handler << "x,y,z\n";
+  handler.precision(max_double_digits);
   for (auto &particle : particles) {
-    fprintf(handler, "%f,%f,%f\n", particle.x, particle.y, particle.z);
+    handler << particle << '\n';
   }
-  fclose(handler);
-}
-
-void printIterationFile(const Particle *particle_array, const int iteration,
-                        const std::string &output, const int rank_id,
-                        const int length) {
-
-  std::ostringstream convert;
-  convert << iteration;
-  std::string value = convert.str();
-
-  std::ostringstream rankstring;
-  rankstring << rank_id;
-  std::string valueRank = rankstring.str();
-
-  FILE *handler;
-  std::string file_name =
-      output + "/rank" + valueRank + "iteration" + value + ".bin";
-  handler = fopen(file_name.c_str(), "ab");
-  if (nullptr == handler) {
-    printf("Unable to open file=[%s]. Nothing to do\n", file_name.c_str());
-    exit(0);
-  }
-
-  fwrite(particle_array, sizeof(Particle), length, handler);
-
-  fclose(handler);
-}
-
-void printRankExecutionTimeFile(const double compTime,
-                                const std::string &output, const int rank_id) {
-
-  std::ostringstream rankstring;
-  rankstring << rank_id;
-  std::string valueRank = rankstring.str();
-
-  FILE *handler;
-  std::string file_name = output + "/rank_" + valueRank + "_compTime.txt";
-  handler = fopen(file_name.c_str(), "a");
-  if (nullptr == handler) {
-    printf("Unable to open file=[%s]. Nothing to do\n", file_name.c_str());
-    exit(0);
-  }
-
-  fprintf(handler, "%f,", compTime);
-
-  fclose(handler);
+  handler.close();
 }
 
 void printExecutionTimeFile(const double compTime, const std::string &output,
@@ -186,9 +137,9 @@ bool computeIteration(const Coils &coils, const Coils &e_roof,
 void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
                   const std::string &output, Particles &particles,
                   const int length, const int steps, const double &step_size,
-                  const int mode, const int debugFlag) {
-  int myRank, prefixSize, offset;
-  MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+                  const int mode, const int debug_flag) {
+  int my_rank, prefix_size, offset;
+  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
   int divergenceCounter = 0;
   double totalIOTime = NAN;
@@ -200,17 +151,17 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
   Coils rmi;
   Coils rmf;
 
-  MPI_Scan(&length, &prefixSize, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  offset = prefixSize - length;
+  MPI_Scan(&length, &prefix_size, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  offset = prefix_size - length;
 
-  if (myRank == 0 && debugFlag) {
+  if (my_rank == 0 && debug_flag) {
     std::cout << "Running timestep computations\n";
-    std::cout << "Rank: " << myRank << ", prefixSize: " << prefixSize
+    std::cout << "Rank: " << my_rank << ", prefixSize: " << prefix_size
               << ", offset: " << offset << '\n';
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
-  printIterationFileTxt(particles, 0, myRank, output);
+  printIterationFileTxt(particles, 0, my_rank, output);
   compStartTime = MPI_Wtime();
 
   for (int step = 1; step <= steps; ++step) {
@@ -224,7 +175,7 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
       }
     }
     if (step % 10 == 0) {
-      printIterationFileTxt(particles, step, myRank, output);
+      printIterationFileTxt(particles, step, my_rank, output);
     }
   }
 
@@ -234,20 +185,20 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
   MPI_Barrier(MPI_COMM_WORLD);
   totalCompTime = MPI_Wtime() - compStartTime;
 
-  if (myRank == 0) {
+  if (my_rank == 0) {
     printExecutionTimeFile(totalCompTime, output, 2);
   }
 
-  if (debugFlag) {
-    std::cout << "Rank " << myRank << ", computation time: " << rankCompTime
+  if (debug_flag) {
+    std::cout << "Rank " << my_rank << ", computation time: " << rankCompTime
               << '\n';
-    std::cout << "Rank " << myRank
+    std::cout << "Rank " << my_rank
               << ", divergence counter: " << divergenceCounter << '\n';
     int totalDiverged;
     MPI_Reduce(&divergenceCounter, &totalDiverged, 1, MPI_INT, MPI_SUM, 0,
                MPI_COMM_WORLD);
 
-    if (myRank == 0) {
+    if (my_rank == 0) {
       std::cout << "Number of diverging particles: " << totalDiverged << '\n';
       std::cout << "Total time in IO: " << totalIOTime << '\n';
     }
