@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -141,7 +142,26 @@ bool computeIteration(const Coils &coils, const Coils &e_roof,
 }
 
 void iteration_task(void *buffers[], void *cl_args) {
+  (void)cl_args;
+  Coils *coils = (Coils *)STARPU_VARIABLE_GET_PTR(buffers[0]);
+  Coils *e_roof = (Coils *)STARPU_VARIABLE_GET_PTR(buffers[1]);
+  LengthSegments *length_segments =
+      (LengthSegments *)STARPU_VARIABLE_GET_PTR(buffers[2]);
+  double *step_size = (double *)STARPU_VARIABLE_GET_PTR(buffers[3]);
+  int *mode = (int *)STARPU_VARIABLE_GET_PTR(buffers[4]);
+  int *divergence_counter = (int *)STARPU_VARIABLE_GET_PTR(buffers[5]);
+  std::vector<Particle> *particles =
+      (std::vector<Particle> *)STARPU_VARIABLE_GET_PTR(buffers[6]);
 
+  for (auto &particle : *particles) {
+    if ((particle.x == MINOR_RADIUS) && (particle.y == MINOR_RADIUS) &&
+        (particle.z == MINOR_RADIUS)) {
+      continue;
+    } else {
+      computeIteration(*coils, *e_roof, *length_segments, particle, *step_size,
+                       *mode, *divergence_counter);
+    }
+  }
 }
 
 void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
@@ -196,15 +216,13 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
 
   std::vector<starpu_data_handle_t> particles_dhs(threads);
 
-  starpu_vector_data_register(&coils_dh, STARPU_MAIN_RAM,
-                              (uintptr_t)coils.data(), coils.size(),
-                              sizeof(Coil));
-  starpu_vector_data_register(&e_roof_dh, STARPU_MAIN_RAM,
-                              (uintptr_t)e_roof.data(), e_roof.size(),
-                              sizeof(Coil));
-  starpu_vector_data_register(
-      &length_segments_dh, STARPU_MAIN_RAM, (uintptr_t)length_segments.data(),
-      length_segments.size(), sizeof(std::array<double, TOTAL_OF_GRADES + 1>));
+  starpu_variable_data_register(&coils_dh, STARPU_MAIN_RAM, (uintptr_t)&coils,
+                                sizeof(coils));
+  starpu_variable_data_register(&e_roof_dh, STARPU_MAIN_RAM, (uintptr_t)&e_roof,
+                                sizeof(e_roof));
+  starpu_variable_data_register(&length_segments_dh, STARPU_MAIN_RAM,
+                                (uintptr_t)&length_segments,
+                                sizeof(length_segments));
   starpu_variable_data_register(&step_size_dh, STARPU_MAIN_RAM,
                                 (uintptr_t)&step_size, sizeof(step_size));
   starpu_variable_data_register(&mode_dh, STARPU_MAIN_RAM, (uintptr_t)&mode_dh,
@@ -216,9 +234,9 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
   assert(local_particles.size() == particles_dhs.size());
 
   for (int i = 0; auto &particle_group : local_particles) {
-    starpu_vector_data_register(&particles_dhs[i], STARPU_MAIN_RAM,
-                                (uintptr_t)particle_group.data(),
-                                particle_group.size(), sizeof(Particle));
+    starpu_variable_data_register(&particles_dhs[i], STARPU_MAIN_RAM,
+                                  (uintptr_t)&particle_group,
+                                  sizeof(particle_group));
     i += 1;
   }
 
@@ -260,20 +278,14 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
     }
     starpu_task_wait_for_all();
 
-    // for (auto &particle : particles) {
-    //   if ((particle.x == MINOR_RADIUS) && (particle.y == MINOR_RADIUS) &&
-    //       (particle.z == MINOR_RADIUS)) {
-    //     continue;
-    //   } else {
-    //     computeIteration(coils, e_roof, length_segments, particle, step_size,
-    //                      mode, divergenceCounter);
-    //   }
-    // }
     if (step % 10 == 0) {
-      printIterationFileTxt(particles, step, my_rank, output);
+      Particles reconstructed(particles.size());
+      for (auto it = reconstructed.begin(); auto &group : local_particles) {
+        it = std::copy(group.begin(), group.end(), it);
+      }
+      printIterationFileTxt(reconstructed, step, my_rank, output);
     }
   }
-
   compEndTime = MPI_Wtime();
   rankCompTime = compEndTime - compStartTime;
 
@@ -287,12 +299,10 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
   starpu_data_unregister(mode_dh);
   starpu_data_unregister(divergence_counter_dh);
 
-  for(auto &particles_dh : particles_dhs)
-  {
+  for (auto &particles_dh : particles_dhs) {
     starpu_data_unregister(particles_dh);
   }
   starpu_shutdown();
-
 
   if (my_rank == 0) {
     printExecutionTimeFile(totalCompTime, output, 2);
