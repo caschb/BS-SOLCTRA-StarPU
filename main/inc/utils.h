@@ -29,7 +29,6 @@
 
 struct Cartesian {
   double x, y, z;
-  void print() { std::cout << x << ',' << y << ',' << z << '\n'; }
   Cartesian(double x = 0.0, double y = 0.0, double z = 0.0)
       : x(x), y(y), z(z) {}
   friend std::ostream &operator<<(std::ostream &os,

@@ -130,7 +130,7 @@ bool computeIteration(const Coils &coils, const Coils &e_roof,
     r_vector.y = start_point.y - zero_vect.y;
     r_vector.z = start_point.z - zero_vect.z;
     r_radius = norm_of(r_vector);
-    if (r_radius > 0.0944165) {
+    if (r_radius > MINOR_RADIUS) {
       start_point.x = MINOR_RADIUS;
       start_point.y = MINOR_RADIUS;
       start_point.z = MINOR_RADIUS;
