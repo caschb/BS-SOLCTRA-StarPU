@@ -51,7 +51,7 @@ double getStepSizeFromArgs(const int &argc, char **argv) {
 }
 
 void LoadParticles(const int &argc, char **argv, Particles &particles,
-                   const int length, const int seedValue) {
+                   const unsigned int length, const unsigned int seedValue) {
   bool found = false;
   for (int i = 1; i < argc - 1; ++i) {
     std::string tmp = argv[i];
@@ -294,7 +294,7 @@ int main(int argc, char **argv) {
     printf("Particles initialized\n");
   }
 
-  int myShare = length / commSize;
+  auto myShare = length / commSize;
 
   if (myRank < length % commSize) {
     myShare = myShare + 1;
@@ -312,12 +312,12 @@ int main(int argc, char **argv) {
     }
   }
 
-  MPI_Bcast(&displacements.front(), commSize, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&displacements.front(), (int) commSize, MPI_INT, 0, MPI_COMM_WORLD);
 
   Particles local_particles(myShare);
 
   MPI_Scatterv(particles.data(), groupMyShare.data(), displacements.data(),
-               MPI_Cartesian, local_particles.data(), myShare, MPI_Cartesian, 0,
+               MPI_Cartesian, local_particles.data(), (int) myShare, MPI_Cartesian, 0,
                MPI_COMM_WORLD);
 
   Coils coils;
@@ -356,18 +356,18 @@ int main(int argc, char **argv) {
     std::cout << "Simulation finished" << std::endl;
     std::cout << "Total execution time=[" << (endTime - startTime) << "]."
               << std::endl;
-    handler << "Total execution time=[" << (endTime - startTime) << "]."
-            << std::endl;
-    handler.close();
-    handler.open("stats.csv", std::ofstream::out | std::ofstream::app);
-    if (!handler.is_open()) {
-      std::cerr << "Unable to open stats.csv for appending. Nothing to do."
-                << std::endl;
-      exit(0);
-    }
-    handler << jobId << "," << length << "," << steps << "," << stepSize << ","
-            << output << "," << (endTime - startTime) << std::endl;
-    handler.close();
+    // handler << "Total execution time=[" << (endTime - startTime) << "]."
+            // << std::endl;
+    // handler.close();
+    // handler.open("stats.csv", std::ofstream::out | std::ofstream::app);
+    // if (!handler.is_open()) {
+    //   std::cerr << "Unable to open stats.csv for appending. Nothing to do."
+    //             << std::endl;
+    //   exit(0);
+    // }
+    // handler << jobId << "," << length << "," << steps << "," << stepSize << ","
+    //         << output << "," << (endTime - startTime) << std::endl;
+    // handler.close();
     time_t now = time(0);
     char *dt = ctime(&now);
 

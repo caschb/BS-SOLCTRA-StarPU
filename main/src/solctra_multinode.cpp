@@ -14,7 +14,7 @@
 #include <string_view>
 #include <utils.h>
 
-void printIterationFileTxt(Particles &particles, const int iteration,
+void printIterationFileTxt(Particles &particles, const unsigned int iteration,
                            const int rank, const std::string_view output) {
   constexpr auto max_double_digits = std::numeric_limits<double>::max_digits10;
   std::ostringstream filename_ss;
@@ -59,11 +59,10 @@ void printExecutionTimeFile(const double compTime, const std::string &output,
   fclose(handler);
 }
 
-bool computeIteration(const Coils &coils, const Coils &e_roof,
+auto computeIteration(const Coils &coils, const Coils &e_roof,
                       const LengthSegments &length_segments,
                       Particle &start_point, const double &step_size,
                       const int mode, int &divergenceCounter) {
-  bool diverged = false;
   Particle p1;
   Particle p2;
   Particle p3;
@@ -76,16 +75,14 @@ bool computeIteration(const Coils &coils, const Coils &e_roof,
   Cartesian zero_vect;
   Particle p;
   Cartesian r_vector;
-  double norm_temp;
-  double r_radius;
 
   Coils rmi;
   Coils rmf;
 
-  constexpr double half = 1.0 / 2.0;
+  constexpr auto half = 1.0 / 2.0;
   k1 = computeMagneticField(coils, e_roof, rmi, rmf, length_segments,
                             start_point);
-  norm_temp = 1.0 / norm_of(k1);
+  auto norm_temp = 1.0 / norm_of(k1);
   k1.x = (k1.x * norm_temp) * step_size;
   k1.y = (k1.y * norm_temp) * step_size;
   k1.z = (k1.z * norm_temp) * step_size;
@@ -120,16 +117,17 @@ bool computeIteration(const Coils &coils, const Coils &e_roof,
   start_point.y = start_point.y + ((k1.y + 2 * k2.y + 2 * k3.y + k4.y) / 6);
   start_point.z = start_point.z + ((k1.z + 2 * k2.z + 2 * k3.z + k4.z) / 6);
 
+  auto diverged = false;
   if (mode == 1) {
     p.x = start_point.x;
     p.y = start_point.y;
-    zero_vect.x = (p.x / norm_of(p)) * 0.2381; //// Origen vector
-    zero_vect.y = (p.y / norm_of(p)) * 0.2381;
-    zero_vect.z = 0;
+    zero_vect.x = (p.x / norm_of(p)) * MAJOR_RADIUS; //// Origen vector
+    zero_vect.y = (p.y / norm_of(p)) * MAJOR_RADIUS;
+    zero_vect.z = 0.0;
     r_vector.x = start_point.x - zero_vect.x;
     r_vector.y = start_point.y - zero_vect.y;
     r_vector.z = start_point.z - zero_vect.z;
-    r_radius = norm_of(r_vector);
+    auto r_radius = norm_of(r_vector);
     if (r_radius > MINOR_RADIUS) {
       start_point.x = MINOR_RADIUS;
       start_point.y = MINOR_RADIUS;
@@ -166,8 +164,8 @@ void iteration_task(void *buffers[], void *cl_args) {
 
 void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
                   const std::string &output, Particles &particles,
-                  const int steps, const double &step_size, const int mode,
-                  const int debug_flag) {
+                  const unsigned int steps, const double &step_size, const unsigned int mode,
+                  const unsigned int debug_flag) {
   int my_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
@@ -180,32 +178,27 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
 
   std::vector<Particles> local_particles(threads);
 
-  for (unsigned int i = 0, advancement = 0;
+  for (unsigned int thread_number = 0, advancement = 0;
        auto &particle_group : local_particles) {
-    if (i < particles.size() % my_share) {
+    if (thread_number < particles.size() % my_share) {
       particle_group.resize(my_share + 1);
     } else {
       particle_group.resize(my_share);
     }
     auto particles_it_b = particles.begin() + advancement;
     auto particles_it_e =
-        particles.begin() + advancement + particle_group.size();
+        particles.begin() + advancement + (int) particle_group.size();
     std::copy(particles_it_b, particles_it_e, particle_group.begin());
     advancement += particle_group.size();
-    i += 1;
+    thread_number += 1;
   }
 
-  int divergenceCounter = 0;
-  double totalIOTime = NAN;
-  double compStartTime = NAN;
-  double compEndTime = NAN;
-  double rankCompTime = NAN;
-  double totalCompTime = NAN;
+  auto divergenceCounter = 0;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
   printIterationFileTxt(particles, 0, my_rank, output);
-  compStartTime = MPI_Wtime();
+  auto compStartTime = MPI_Wtime();
 
   starpu_data_handle_t coils_dh;
   starpu_data_handle_t e_roof_dh;
@@ -225,7 +218,7 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
                                 sizeof(length_segments));
   starpu_variable_data_register(&step_size_dh, STARPU_MAIN_RAM,
                                 (uintptr_t)&step_size, sizeof(step_size));
-  starpu_variable_data_register(&mode_dh, STARPU_MAIN_RAM, (uintptr_t)&mode_dh,
+  starpu_variable_data_register(&mode_dh, STARPU_MAIN_RAM, (uintptr_t)&mode,
                                 sizeof(mode));
   starpu_variable_data_register(&divergence_counter_dh, STARPU_MAIN_RAM,
                                 (uintptr_t)&divergenceCounter,
@@ -233,7 +226,7 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
 
   assert(local_particles.size() == particles_dhs.size());
 
-  for (int i = 0; auto &particle_group : local_particles) {
+  for (size_t i = 0; auto &particle_group : local_particles) {
     starpu_variable_data_register(&particles_dhs[i], STARPU_MAIN_RAM,
                                   (uintptr_t)&particle_group,
                                   sizeof(particle_group));
@@ -253,7 +246,7 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
   cl.modes[5] = STARPU_W;
   cl.modes[6] = STARPU_RW;
 
-  for (auto step = 1; step <= steps; ++step) {
+  for (unsigned int step = 1; step <= steps; ++step) {
     for (unsigned int i = 0; i < threads; ++i) {
       status = starpu_task_insert(
           &cl, STARPU_R, coils_dh, STARPU_R, e_roof_dh, STARPU_R,
@@ -286,11 +279,11 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
       printIterationFileTxt(reconstructed, step, my_rank, output);
     }
   }
-  compEndTime = MPI_Wtime();
-  rankCompTime = compEndTime - compStartTime;
+  auto compEndTime = MPI_Wtime();
+  auto rankCompTime = compEndTime - compStartTime;
 
   MPI_Barrier(MPI_COMM_WORLD);
-  totalCompTime = MPI_Wtime() - compStartTime;
+  auto totalCompTime = MPI_Wtime() - compStartTime;
 
   starpu_data_unregister(coils_dh);
   starpu_data_unregister(e_roof_dh);
@@ -319,7 +312,6 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
 
     if (my_rank == 0) {
       std::cout << "Number of diverging particles: " << totalDiverged << '\n';
-      std::cout << "Total time in IO: " << totalIOTime << '\n';
     }
   }
 }

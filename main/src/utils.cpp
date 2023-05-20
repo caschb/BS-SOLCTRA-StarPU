@@ -18,17 +18,17 @@
 #include <utils.h>
 #include <vector>
 
-void loadParticleFile(Particles &particles, const int numberOfParticles,
+void loadParticleFile(Particles &particles, const unsigned int numberOfParticles,
                       const std::string_view path) {
   static const auto delimeter = "\t";
   std::ifstream particles_file(path.data());
   std::string line;
-  auto line_number = 0;
+  unsigned int line_number = 0;
   while (std::getline(particles_file, line) &&
          line_number < numberOfParticles) {
     size_t position = 0;
     std::array<double, 3> data;
-    auto idx = 0;
+    unsigned int idx = 0;
     while (position != std::string::npos && position < line.size()) {
       auto current_pos = position;
       position = line.find(delimeter, position);
@@ -61,7 +61,7 @@ void loadCoilData(Coils &coils, const std::string_view path) {
     while (std::getline(coil_file, line)) {
       size_t position = 0;
       std::array<double, 3> data;
-      auto idx = 0;
+      unsigned int idx = 0;
       while (position != std::string::npos && position < line.size()) {
         auto current_pos = position;
         position = line.find(delimeter, position);
@@ -210,7 +210,7 @@ double randomGenerator(const double min, const double max,
   return result;
 }
 
-void initializeParticles(Particles &particles, const int seedValue) {
+void initializeParticles(Particles &particles, const unsigned int seedValue) {
   double radius;
   double minorRadius;
   double toroidalAngle;

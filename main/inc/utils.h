@@ -7,28 +7,18 @@
 #ifndef SOLCTRA_UTILS_H
 #define SOLCTRA_UTILS_H
 
-#include <ostream>
-#define PI 3.141592654
-#define MIU 1.2566e-06
-#define I -4350
-#define MINOR_RADIUS 0.0944165
-#define MAJOR_RADIUS 0.2381
-
-#define TOTAL_OF_GRADES 360
-#define TOTAL_OF_COILS 12
-
 #include <array>
 #include <cmath>
 #include <iostream>
 #include <mpi.h>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <limits>
 
 struct Cartesian {
-  double x, y, z;
+  double x{0.0}, y{0.0}, z{0.0};
   Cartesian(double x = 0.0, double y = 0.0, double z = 0.0)
       : x(x), y(y), z(z) {}
   friend std::ostream &operator<<(std::ostream &os,
@@ -38,19 +28,28 @@ struct Cartesian {
   }
 };
 
-typedef std::array<Cartesian, TOTAL_OF_GRADES + 1> Coil;
-typedef std::array<Coil, TOTAL_OF_COILS> Coils;
-typedef std::array<std::array<double, TOTAL_OF_GRADES>, TOTAL_OF_COILS>
-    LengthSegments;
-typedef Cartesian Particle;
-typedef std::vector<Particle> Particles;
+// constexpr auto PI = 3.141592654;
+constexpr auto PI = std::numbers::pi;
+constexpr auto MIU = 1.2566e-06;
+constexpr auto I = -4350;
+constexpr auto MINOR_RADIUS = 0.0944165;
+constexpr auto MAJOR_RADIUS = 0.2381;
+constexpr auto TOTAL_OF_GRADES = 360;
+constexpr auto TOTAL_OF_COILS = 12;
+
+using Coil = std::array<Cartesian, TOTAL_OF_GRADES + 1>;
+using Coils = std::array<Coil, TOTAL_OF_COILS>;
+using LengthSegments =
+    std::array<std::array<double, TOTAL_OF_GRADES>, TOTAL_OF_COILS>;
+using Particle = Cartesian;
+using Particles = std::vector<Particle>;
 
 MPI_Datatype setupMPICartesianType();
 MPI_Datatype setupMPIArray(MPI_Datatype base_type, int count);
 
-void initializeParticles(Particles &particles, const int seedValue);
+void initializeParticles(Particles &particles, const unsigned int seedValue);
 
-void loadParticleFile(Particles &particles, const int numberOfParticles,
+void loadParticleFile(Particles &particles, const unsigned int numberOfParticles,
                       const std::string_view path);
 
 void loadCoilData(Coils &coil, const std::string_view path);
@@ -72,7 +71,7 @@ void createDirectoryIfNotExists(const std::string &path);
 bool directoryExists(const std::string &path);
 std::string getZeroPadded(const int num);
 double randomGenerator(const double min, const double max, const int seedValue);
-inline double norm_of(const Cartesian &vec) {
+inline auto norm_of(const Cartesian &vec) {
   return sqrt((vec.x * vec.x) + (vec.y * vec.y) + (vec.z * vec.z));
 }
 
