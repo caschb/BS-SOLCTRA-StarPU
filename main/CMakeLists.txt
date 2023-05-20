@@ -19,8 +19,6 @@ else(STARPU_FOUND)
     message(FATAL_ERROR "StarPU not found")
 endif()
 
-
-
 if(${TREAT_WARNINGS_AS_ERRORS})
     target_compile_options(${EXECUTABLE_TARGET} PRIVATE -Werror)
 endif()
