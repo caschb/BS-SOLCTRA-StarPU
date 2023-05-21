@@ -141,15 +141,17 @@ auto computeIteration(const Coils &coils, const Coils &e_roof,
 
 void iteration_task(void *buffers[], void *cl_args) {
   (void)cl_args;
-  Coils *coils = (Coils *)STARPU_VARIABLE_GET_PTR(buffers[0]);
-  Coils *e_roof = (Coils *)STARPU_VARIABLE_GET_PTR(buffers[1]);
-  LengthSegments *length_segments =
-      (LengthSegments *)STARPU_VARIABLE_GET_PTR(buffers[2]);
-  double *step_size = (double *)STARPU_VARIABLE_GET_PTR(buffers[3]);
-  int *mode = (int *)STARPU_VARIABLE_GET_PTR(buffers[4]);
-  int *divergence_counter = (int *)STARPU_VARIABLE_GET_PTR(buffers[5]);
-  std::vector<Particle> *particles =
-      (std::vector<Particle> *)STARPU_VARIABLE_GET_PTR(buffers[6]);
+  auto *coils = reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[0]));
+  auto *e_roof = reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[1]));
+  auto *length_segments =
+      reinterpret_cast<LengthSegments *>(STARPU_VARIABLE_GET_PTR(buffers[2]));
+  auto *step_size =
+      reinterpret_cast<double *>(STARPU_VARIABLE_GET_PTR(buffers[3]));
+  auto *mode = reinterpret_cast<int *>(STARPU_VARIABLE_GET_PTR(buffers[4]));
+  auto *divergence_counter =
+      reinterpret_cast<int *>(STARPU_VARIABLE_GET_PTR(buffers[5]));
+  auto *particles = reinterpret_cast<std::vector<Particle> *>(
+      STARPU_VARIABLE_GET_PTR(buffers[6]));
 
   for (auto &particle : *particles) {
     if ((particle.x == MINOR_RADIUS) && (particle.y == MINOR_RADIUS) &&
@@ -164,8 +166,8 @@ void iteration_task(void *buffers[], void *cl_args) {
 
 void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
                   const std::string &output, Particles &particles,
-                  const unsigned int steps, const double &step_size, const unsigned int mode,
-                  const unsigned int debug_flag) {
+                  const unsigned int steps, const double &step_size,
+                  const unsigned int mode, const unsigned int debug_flag) {
   int my_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
@@ -187,7 +189,8 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
     }
     auto particles_it_b = particles.begin() + advancement;
     auto particles_it_e =
-        particles.begin() + advancement + (int) particle_group.size();
+        particles.begin() + advancement +
+        reinterpret_cast<unsigned long>(particle_group.size());
     std::copy(particles_it_b, particles_it_e, particle_group.begin());
     advancement += particle_group.size();
     thread_number += 1;
@@ -209,26 +212,30 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
 
   std::vector<starpu_data_handle_t> particles_dhs(threads);
 
-  starpu_variable_data_register(&coils_dh, STARPU_MAIN_RAM, (uintptr_t)&coils,
+  starpu_variable_data_register(&coils_dh, STARPU_MAIN_RAM,
+                                reinterpret_cast<uintptr_t>(&coils),
                                 sizeof(coils));
-  starpu_variable_data_register(&e_roof_dh, STARPU_MAIN_RAM, (uintptr_t)&e_roof,
+  starpu_variable_data_register(&e_roof_dh, STARPU_MAIN_RAM,
+                                reinterpret_cast<uintptr_t>(&e_roof),
                                 sizeof(e_roof));
   starpu_variable_data_register(&length_segments_dh, STARPU_MAIN_RAM,
-                                (uintptr_t)&length_segments,
+                                reinterpret_cast<uintptr_t>(&length_segments),
                                 sizeof(length_segments));
   starpu_variable_data_register(&step_size_dh, STARPU_MAIN_RAM,
-                                (uintptr_t)&step_size, sizeof(step_size));
-  starpu_variable_data_register(&mode_dh, STARPU_MAIN_RAM, (uintptr_t)&mode,
+                                reinterpret_cast<uintptr_t>(&step_size),
+                                sizeof(step_size));
+  starpu_variable_data_register(&mode_dh, STARPU_MAIN_RAM,
+                                reinterpret_cast<uintptr_t>(&mode),
                                 sizeof(mode));
   starpu_variable_data_register(&divergence_counter_dh, STARPU_MAIN_RAM,
-                                (uintptr_t)&divergenceCounter,
+                                reinterpret_cast<uintptr_t>(&divergenceCounter),
                                 sizeof(divergenceCounter));
 
   assert(local_particles.size() == particles_dhs.size());
 
   for (size_t i = 0; auto &particle_group : local_particles) {
     starpu_variable_data_register(&particles_dhs[i], STARPU_MAIN_RAM,
-                                  (uintptr_t)&particle_group,
+                                  reinterpret_cast<uintptr_t>(&particle_group),
                                   sizeof(particle_group));
     i += 1;
   }

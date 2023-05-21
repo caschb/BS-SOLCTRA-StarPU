@@ -11,16 +11,15 @@
 #include <cmath>
 #include <iostream>
 #include <mpi.h>
-#include <ostream>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
 
 struct Cartesian {
   double x{0.0}, y{0.0}, z{0.0};
-  Cartesian(double x = 0.0, double y = 0.0, double z = 0.0)
-      : x(x), y(y), z(z) {}
+  void print() { std::cout << x << ',' << y << ',' << z << '\n'; }
+  Cartesian(double x_e = 0.0, double y_e = 0.0, double z_e = 0.0)
+      : x(x_e), y(y_e), z(z_e) {}
   friend std::ostream &operator<<(std::ostream &os,
                                   const Cartesian &cartesian) {
     os << cartesian.x << ',' << cartesian.y << ',' << cartesian.z;
@@ -28,7 +27,6 @@ struct Cartesian {
   }
 };
 
-// constexpr auto PI = 3.141592654;
 constexpr auto PI = std::numbers::pi;
 constexpr auto MIU = 1.2566e-06;
 constexpr auto I = -4350;
@@ -47,9 +45,9 @@ using Particles = std::vector<Particle>;
 MPI_Datatype setupMPICartesianType();
 MPI_Datatype setupMPIArray(MPI_Datatype base_type, int count);
 
-void initializeParticles(Particles &particles, const unsigned int seedValue);
+void initializeParticles(Particles &particles, const int seedValue);
 
-void loadParticleFile(Particles &particles, const unsigned int numberOfParticles,
+void loadParticleFile(Particles &particles, const int numberOfParticles,
                       const std::string_view path);
 
 void loadCoilData(Coils &coil, const std::string_view path);
@@ -66,13 +64,13 @@ Cartesian computeMagneticField(const Coils &coils, const Coils &e_roof,
                                const LengthSegments &length_segments,
                                const Particle &point);
 
-double getCurrentTime();
+auto getCurrentTime();
 void createDirectoryIfNotExists(const std::string &path);
 bool directoryExists(const std::string &path);
-std::string getZeroPadded(const int num);
+auto getZeroPadded(const int num);
 double randomGenerator(const double min, const double max, const int seedValue);
 inline auto norm_of(const Cartesian &vec) {
-  return sqrt((vec.x * vec.x) + (vec.y * vec.y) + (vec.z * vec.z));
+  return std::sqrt((vec.x * vec.x) + (vec.y * vec.y) + (vec.z * vec.z));
 }
 
 #endif

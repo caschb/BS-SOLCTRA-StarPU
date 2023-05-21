@@ -18,17 +18,17 @@
 #include <utils.h>
 #include <vector>
 
-void loadParticleFile(Particles &particles, const unsigned int numberOfParticles,
+void loadParticleFile(Particles &particles, const int numberOfParticles,
                       const std::string_view path) {
   static const auto delimeter = "\t";
   std::ifstream particles_file(path.data());
   std::string line;
-  unsigned int line_number = 0;
+  auto line_number = 0;
   while (std::getline(particles_file, line) &&
          line_number < numberOfParticles) {
     size_t position = 0;
     std::array<double, 3> data;
-    unsigned int idx = 0;
+    auto idx = 0;
     while (position != std::string::npos && position < line.size()) {
       auto current_pos = position;
       position = line.find(delimeter, position);
@@ -210,23 +210,17 @@ double randomGenerator(const double min, const double max,
   return result;
 }
 
-void initializeParticles(Particles &particles, const unsigned int seedValue) {
-  double radius;
-  double minorRadius;
-  double toroidalAngle;
-  double poloidalAngle;
-  double toroidalRadians;
-  double poloidalRadians;
+void initializeParticles(Particles &particles, const int seedValue) {
   auto length = particles.size();
   printf("Initializing with seed %d\n", seedValue);
   for (size_t point = 0; point < length; point++) {
-    radius = randomGenerator(0.0, 0.4, seedValue);
-    toroidalAngle = randomGenerator(0.0, 360.0, seedValue);
-    poloidalAngle = randomGenerator(0.0, 360.0, seedValue);
+    auto radius = randomGenerator(0.0, 0.4, seedValue);
+    auto toroidalAngle = randomGenerator(0.0, 360.0, seedValue);
+    auto poloidalAngle = randomGenerator(0.0, 360.0, seedValue);
 
-    toroidalRadians = toroidalAngle * PI / 180.0;
-    poloidalRadians = poloidalAngle * PI / 180.0;
-    minorRadius = MINOR_RADIUS * radius;
+    auto toroidalRadians = toroidalAngle * PI / 180.0;
+    auto poloidalRadians = poloidalAngle * PI / 180.0;
+    auto minorRadius = MINOR_RADIUS * radius;
     particles[point].x = (MAJOR_RADIUS + (minorRadius)*cos(poloidalRadians)) *
                          cos(toroidalRadians);
     particles[point].y = (MAJOR_RADIUS + (minorRadius)*cos(poloidalRadians)) *
@@ -235,7 +229,7 @@ void initializeParticles(Particles &particles, const unsigned int seedValue) {
   }
 }
 
-double getCurrentTime() {
+auto getCurrentTime() {
   struct timeval tod;
   gettimeofday(&tod, nullptr);
   return static_cast<double>(tod.tv_sec) +
@@ -264,7 +258,7 @@ bool directoryExists(const std::string &path) {
   }
 }
 
-std::string getZeroPadded(const int num) {
+auto getZeroPadded(const int num) {
   std::ostringstream convert;
   convert << num;
   std::string value = convert.str();

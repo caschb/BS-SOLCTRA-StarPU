@@ -1,9 +1,9 @@
 set(EXECUTABLE_TARGET bs_solctra)
 
 add_executable(${EXECUTABLE_TARGET} src/main_multinode.cpp src/solctra_multinode.cpp src/utils.cpp)
+target_include_directories(${EXECUTABLE_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 find_package(MPI REQUIRED)
-target_include_directories(${EXECUTABLE_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/inc)
 target_link_libraries(${EXECUTABLE_TARGET} PRIVATE MPI::MPI_CXX)
 
 find_package(Threads REQUIRED)
@@ -29,4 +29,19 @@ endif()
 
 if(${FAST_MATH})
     target_compile_options(${EXECUTABLE_TARGET} PRIVATE -ffast-math)
+endif()
+
+if(${ACTIVATE_SANITIZERS})
+    target_compile_options(${EXECUTABLE_TARGET} PRIVATE -fsanitize=address)
+    target_link_options(${EXECUTABLE_TARGET} PRIVATE -fsanitize=address)
+endif()
+
+if(${GENERATE_OPTIMIZATION_REPORTS})
+    if(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
+    target_compile_options(${EXECUTABLE_TARGET} PRIVATE -Rpass="*" -Rpass-missed="*" -Rpass-analysis="*")
+    endif()
+
+    if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+    target_compile_options(${EXECUTABLE_TARGET} PRIVATE -fopt-info-vec)
+    endif()
 endif()
