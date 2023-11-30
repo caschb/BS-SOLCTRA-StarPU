@@ -1,7 +1,7 @@
 results*
 build/*
-.vscode/*
 stdout*
 .cache/*
 stats.csv
 starpu.log
+CMakeUserPresets.json

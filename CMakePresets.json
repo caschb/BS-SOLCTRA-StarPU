@@ -1,0 +1,65 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "gcc-config",
+            "displayName": "Config using gcc and g++",
+            "description": "Default build with ninja+gcc",
+            "generator": "Ninja",
+            "hidden": true,
+            "environment": {
+                "CC": "gcc",
+                "CXX": "g++"
+            }
+        },
+        {
+            "name": "gcc-debug",
+            "inherits": "gcc-config",
+            "description": "Debug configuration with ninja+gcc",
+            "binaryDir": "${sourceDir}/build/gcc-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "bs_solctra_WARNINGS_AS_ERRORS": "OFF",
+                "bs_solctra_ENABLE_IPO": "OFF"
+            }
+        },
+        {
+            "name": "clang-config",
+            "displayName": "Config using clang and clang++",
+            "description": "Default build with ninja+clang",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/clang-build",
+            "hidden": true,
+            "environment": {
+                "CC": "clang",
+                "CXX": "clang++"
+            }
+        },
+        {
+            "name": "clang-debug",
+            "displayName": "Config with clang debug",
+            "inherits": "clang-config",
+            "binaryDir": "${sourceDir}/build/clang-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "bs_solctra_WARNINGS_AS_ERRORS": "OFF",
+                "bs_solctra_ENABLE_IPO": "OFF"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "clang-debug-build",
+            "configurePreset": "clang-debug"
+        },
+        {
+            "name": "gcc-debug-build",
+            "configurePreset": "gcc-debug"
+        }
+    ]
+}

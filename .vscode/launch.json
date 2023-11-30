@@ -1,0 +1,39 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "LLDB Debug clang",
+            "program": "${workspaceFolder}/build/clang-debug/main/bs_solctra",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "attach",
+            "name": "LLDB Debug clang+mpi",
+            "program": "${workspaceFolder}/build/clang-debug/main/bs_solctra",
+            "pid": "${command:pickMyProcess}"
+        },
+        {
+            "type": "cppdbg",
+            "request": "launch",
+            "name": "GDB Debug clang",
+            "program": "${workspaceFolder}/build/clang-debug/main/bs_solctra",
+            "args": [],
+            "MIMode": "gdb",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "cppdbg",
+            "request": "attach",
+            "name": "GDB Debug clang+mpi",
+            "program": "${workspaceFolder}/build/clang-debug/main/bs_solctra",
+            "MIMode": "gdb",
+        }
+    ]
+}
