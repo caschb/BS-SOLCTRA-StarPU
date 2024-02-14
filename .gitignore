@@ -2,6 +2,8 @@ results*
 build/*
 .vscode/*
 stdout*
+stderr*
 .cache/*
 stats.csv
 starpu.log
+*swp
