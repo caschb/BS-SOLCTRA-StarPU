@@ -153,7 +153,8 @@ unsigned getDimension(const int &argc, char **argv) {
 
 int main(int argc, char **argv) {
   /*****MPI variable declarations and initializations**********/
-  MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, nullptr);
+  auto provided = 0;
+  MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
 
   auto my_rank = 0u;
   auto comm_size = 0u;

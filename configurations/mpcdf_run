@@ -1,0 +1,16 @@
+#!/bin/sh
+#SBATCH --job-name=bs-solctra-starpu
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=72
+#SBATCH --time=0:15:00
+#SBATCH -o stdout.%j
+#SBATCH -e stderr.%j
+#SBATCH --exclusive
+#SBATCH --partition=small
+
+export ID=${SLURM_JOB_ID}
+
+mpiexec -n 2 ../build/main/bs_solctra -length 1024 -id $ID -resource ../data/resources/ -steps 100 -mode 1 -magnetic_prof 0 100 0 2 -print_type 1
+######################################################################
+
