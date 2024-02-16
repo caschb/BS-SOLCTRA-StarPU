@@ -9,6 +9,7 @@
 #include <random>
 #include <solctra_multinode.h>
 #include <sstream>
+#include <starpu_mpi.h>
 #include <string>
 #include <utils.h>
 #include <vector>
@@ -185,15 +186,14 @@ std::vector<int> initialize_shares_binomial(const unsigned int comm_size,
 
 int main(int argc, char **argv) {
   /*****MPI variable declarations and initializations**********/
-  auto provided = 0;
-  MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
+  starpu_mpi_init_conf(&argc, &argv, 1, MPI_COMM_WORLD, nullptr);
 
   auto my_rank = 0u;
   auto comm_size = 0u;
   auto name_len = 0u;
   char processor_name[MPI_MAX_PROCESSOR_NAME];
-  MPI_Comm_size(MPI_COMM_WORLD, reinterpret_cast<int *>(&comm_size));
-  MPI_Comm_rank(MPI_COMM_WORLD, reinterpret_cast<int *>(&my_rank));
+  starpu_mpi_comm_size(MPI_COMM_WORLD, reinterpret_cast<int *>(&comm_size));
+  starpu_mpi_comm_rank(MPI_COMM_WORLD, reinterpret_cast<int *>(&my_rank));
   MPI_Get_processor_name(processor_name, reinterpret_cast<int *>(&name_len));
 
   /********Create MPI particle type*****************/

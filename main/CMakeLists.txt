@@ -10,7 +10,7 @@ find_package(Threads REQUIRED)
 target_link_libraries(${EXECUTABLE_TARGET} PRIVATE Threads::Threads)
 
 find_package(PkgConfig)
-pkg_check_modules(STARPU REQUIRED starpu-1.4)
+pkg_check_modules(STARPU REQUIRED starpu-1.4 starpumpi-1.4)
 if(STARPU_FOUND)
     target_include_directories(${EXECUTABLE_TARGET} SYSTEM PRIVATE ${STARPU_INCLUDE_DIRS})
     target_link_directories(${EXECUTABLE_TARGET} PRIVATE ${STARPU_STATIC_LIBRARY_DIRS})
