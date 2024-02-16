@@ -6,6 +6,7 @@
 #include <iostream>
 #include <mpi.h>
 #include <ostream>
+#include <random>
 #include <solctra_multinode.h>
 #include <sstream>
 #include <string>
@@ -151,6 +152,37 @@ unsigned getDimension(const int &argc, char **argv) {
   return DEFAULT_DIMENSION;
 }
 
+std::vector<int> initialize_shares_uniform(const unsigned int comm_size,
+                                           const unsigned int length) {
+  std::vector<int> groupMyShare(comm_size);
+  for (unsigned int i = 0; i < comm_size; ++i) {
+    groupMyShare[i] = length / comm_size;
+    if (i < length % comm_size) {
+      groupMyShare[i] += 1;
+    }
+  }
+  return groupMyShare;
+}
+
+std::vector<int> initialize_shares_binomial(const unsigned int comm_size,
+                                            const unsigned int length) {
+  std::vector<int> groupMyShare(comm_size);
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::binomial_distribution<> distribution(comm_size - 1, 0.5);
+
+  for (unsigned int i = 0; i < length; ++i) {
+    auto rank = distribution(gen);
+    groupMyShare[rank] += 1;
+  }
+
+  for (unsigned int i = 0; i < comm_size; ++i) {
+    std::cout << i << '\t' << groupMyShare[i] << '\n';
+  }
+
+  return groupMyShare;
+}
+
 int main(int argc, char **argv) {
   /*****MPI variable declarations and initializations**********/
   auto provided = 0;
@@ -262,6 +294,9 @@ int main(int argc, char **argv) {
 
   double startInitializationTime = 0.0;
   double endInitializationTime = 0.0;
+  std::vector<int> displacements(comm_size);
+  std::vector<int> groupMyShare(comm_size);
+  int myShare;
 
   // Only rank 0 reads the information from the input file
   if (my_rank == 0) {
@@ -277,26 +312,15 @@ int main(int argc, char **argv) {
                 << std::endl;
     }
     std::cout << "Particles initialized\n";
-  }
-
-  int myShare = length / comm_size;
-
-  if (my_rank < length % comm_size) {
-    myShare = myShare + 1;
-  }
-
-  std::vector<int> groupMyShare(comm_size);
-  std::vector<int> displacements(comm_size);
-
-  MPI_Gather(&myShare, 1, MPI_INT, &groupMyShare.front(), 1, MPI_INT, 0,
-             MPI_COMM_WORLD);
-
-  if (my_rank == 0) {
+    // groupMyShare = initialize_shares_uniform(comm_size, length);
+    groupMyShare = initialize_shares_binomial(comm_size, length);
     for (unsigned int i = 1; i < comm_size; i++) {
       displacements[i] = displacements[i - 1] + groupMyShare[i - 1];
     }
   }
 
+  MPI_Scatter(&groupMyShare.front(), 1, MPI_INT, &myShare, 1, MPI_INT, 0,
+              MPI_COMM_WORLD);
   MPI_Bcast(&displacements.front(), comm_size, MPI_INT, 0, MPI_COMM_WORLD);
 
   Particles local_particles(myShare);
