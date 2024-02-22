@@ -171,9 +171,6 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
 
   auto divergenceCounter = 0;
 
-  MPI_Barrier(MPI_COMM_WORLD);
-
-
   for (unsigned int step = 1; step <= steps; ++step) {
     for (auto &particle : particles) {
       if ((particle.x == MINOR_RADIUS) && (particle.y == MINOR_RADIUS) &&
