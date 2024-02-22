@@ -356,8 +356,8 @@ int main(int argc, char **argv) {
     startTime = MPI_Wtime();
     std::cout << "Executing simulation" << std::endl;
   }
-  runParticles(coils, e_roof, length_segments, output, local_particles, steps,
-               step_size, mode, debug_flag);
+  runParticles(coils, e_roof, length_segments, local_particles, steps,
+               step_size, mode);
   MPI_Barrier(MPI_COMM_WORLD);
 
   if (my_rank == 0) {

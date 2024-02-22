@@ -165,18 +165,14 @@ void iteration_task(void *buffers[], void *cl_args) {
 }
 
 void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
-                  const std::string &output, Particles &particles,
+                  Particles &particles,
                   const unsigned int steps, const double &step_size,
-                  const unsigned int mode, const unsigned int debug_flag) {
-  int my_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+                  const unsigned int mode) {
 
   auto divergenceCounter = 0;
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  printIterationFileTxt(particles, 0, my_rank, output);
-  auto compStartTime = MPI_Wtime();
 
   for (unsigned int step = 1; step <= steps; ++step) {
     for (auto &particle : particles) {
@@ -188,32 +184,6 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
                          mode, divergenceCounter);
       }
     }
-    if (step % 10 == 0) {
-      Particles reconstructed(particles.size());
-      printIterationFileTxt(reconstructed, step, my_rank, output);
-    }
-  }
-  auto compEndTime = MPI_Wtime();
-  auto rankCompTime = compEndTime - compStartTime;
-
-  MPI_Barrier(MPI_COMM_WORLD);
-  auto totalCompTime = MPI_Wtime() - compStartTime;
-
-  if (my_rank == 0) {
-    printExecutionTimeFile(totalCompTime, output, 2);
   }
 
-  if (debug_flag) {
-    std::cout << "Rank " << my_rank << ", computation time: " << rankCompTime
-              << '\n';
-    std::cout << "Rank " << my_rank
-              << ", divergence counter: " << divergenceCounter << '\n';
-    int totalDiverged;
-    MPI_Reduce(&divergenceCounter, &totalDiverged, 1, MPI_INT, MPI_SUM, 0,
-               MPI_COMM_WORLD);
-
-    if (my_rank == 0) {
-      std::cout << "Number of diverging particles: " << totalDiverged << '\n';
-    }
-  }
 }
