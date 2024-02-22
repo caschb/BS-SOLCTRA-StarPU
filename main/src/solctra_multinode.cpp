@@ -171,31 +171,6 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
   int my_rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-  auto status = starpu_init(nullptr);
-  if (status == -ENODEV) {
-    exit(77);
-  }
-  auto threads = starpu_cpu_worker_get_count();
-  auto my_share = particles.size() / threads;
-
-  std::vector<Particles> local_particles(threads);
-
-  for (unsigned int thread_number = 0, advancement = 0;
-       auto &particle_group : local_particles) {
-    if (thread_number < particles.size() % my_share) {
-      particle_group.resize(my_share + 1);
-    } else {
-      particle_group.resize(my_share);
-    }
-    auto particles_it_b = particles.begin() + advancement;
-    auto particles_it_e =
-        particles.begin() + advancement +
-        reinterpret_cast<unsigned long>(particle_group.size());
-    std::copy(particles_it_b, particles_it_e, particle_group.begin());
-    advancement += particle_group.size();
-    thread_number += 1;
-  }
-
   auto divergenceCounter = 0;
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -203,86 +178,18 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
   printIterationFileTxt(particles, 0, my_rank, output);
   auto compStartTime = MPI_Wtime();
 
-  starpu_data_handle_t coils_dh;
-  starpu_data_handle_t e_roof_dh;
-  starpu_data_handle_t length_segments_dh;
-  starpu_data_handle_t step_size_dh;
-  starpu_data_handle_t mode_dh;
-  starpu_data_handle_t divergence_counter_dh;
-
-  std::vector<starpu_data_handle_t> particles_dhs(threads);
-
-  starpu_variable_data_register(&coils_dh, STARPU_MAIN_RAM,
-                                reinterpret_cast<uintptr_t>(&coils),
-                                sizeof(coils));
-  starpu_variable_data_register(&e_roof_dh, STARPU_MAIN_RAM,
-                                reinterpret_cast<uintptr_t>(&e_roof),
-                                sizeof(e_roof));
-  starpu_variable_data_register(&length_segments_dh, STARPU_MAIN_RAM,
-                                reinterpret_cast<uintptr_t>(&length_segments),
-                                sizeof(length_segments));
-  starpu_variable_data_register(&step_size_dh, STARPU_MAIN_RAM,
-                                reinterpret_cast<uintptr_t>(&step_size),
-                                sizeof(step_size));
-  starpu_variable_data_register(&mode_dh, STARPU_MAIN_RAM,
-                                reinterpret_cast<uintptr_t>(&mode),
-                                sizeof(mode));
-  starpu_variable_data_register(&divergence_counter_dh, STARPU_MAIN_RAM,
-                                reinterpret_cast<uintptr_t>(&divergenceCounter),
-                                sizeof(divergenceCounter));
-
-  assert(local_particles.size() == particles_dhs.size());
-
-  for (size_t i = 0; auto &particle_group : local_particles) {
-    starpu_variable_data_register(&particles_dhs[i], STARPU_MAIN_RAM,
-                                  reinterpret_cast<uintptr_t>(&particle_group),
-                                  sizeof(particle_group));
-    i += 1;
-  }
-
-  starpu_codelet cl;
-  starpu_codelet_init(&cl);
-  cl.nbuffers = 7;
-  cl.cpu_funcs[0] = iteration_task;
-  cl.cpu_funcs_name[0] = "iteration_task";
-  cl.modes[0] = STARPU_R;
-  cl.modes[1] = STARPU_R;
-  cl.modes[2] = STARPU_R;
-  cl.modes[3] = STARPU_R;
-  cl.modes[4] = STARPU_R;
-  cl.modes[5] = STARPU_W;
-  cl.modes[6] = STARPU_RW;
-
   for (unsigned int step = 1; step <= steps; ++step) {
-    for (unsigned int i = 0; i < threads; ++i) {
-      status = starpu_task_insert(
-          &cl, STARPU_R, coils_dh, STARPU_R, e_roof_dh, STARPU_R,
-          length_segments_dh, STARPU_R, step_size_dh, STARPU_R, mode_dh,
-          STARPU_W, divergence_counter_dh, STARPU_RW, particles_dhs[i], 0);
-
-      if (status == -ENODEV) {
-        // StarPU data unregistering
-        starpu_data_unregister(coils_dh);
-        starpu_data_unregister(e_roof_dh);
-        starpu_data_unregister(length_segments_dh);
-        starpu_data_unregister(step_size_dh);
-        starpu_data_unregister(mode_dh);
-        starpu_data_unregister(divergence_counter_dh);
-        starpu_data_unregister(particles_dhs[i]);
-
-        // terminate StarPU, no task can be submitted after
-        starpu_shutdown();
-
-        exit(77);
+    for (auto &particle : particles) {
+      if ((particle.x == MINOR_RADIUS) && (particle.y == MINOR_RADIUS) &&
+          (particle.z == MINOR_RADIUS)) {
+        continue;
+      } else {
+        computeIteration(coils, e_roof, length_segments, particle, step_size,
+                         mode, divergenceCounter);
       }
     }
-    starpu_task_wait_for_all();
-
     if (step % 10 == 0) {
       Particles reconstructed(particles.size());
-      for (auto it = reconstructed.begin(); auto &group : local_particles) {
-        it = std::copy(group.begin(), group.end(), it);
-      }
       printIterationFileTxt(reconstructed, step, my_rank, output);
     }
   }
@@ -291,18 +198,6 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
 
   MPI_Barrier(MPI_COMM_WORLD);
   auto totalCompTime = MPI_Wtime() - compStartTime;
-
-  starpu_data_unregister(coils_dh);
-  starpu_data_unregister(e_roof_dh);
-  starpu_data_unregister(length_segments_dh);
-  starpu_data_unregister(step_size_dh);
-  starpu_data_unregister(mode_dh);
-  starpu_data_unregister(divergence_counter_dh);
-
-  for (auto &particles_dh : particles_dhs) {
-    starpu_data_unregister(particles_dh);
-  }
-  starpu_shutdown();
 
   if (my_rank == 0) {
     printExecutionTimeFile(totalCompTime, output, 2);

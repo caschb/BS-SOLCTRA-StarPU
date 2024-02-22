@@ -241,7 +241,7 @@ void createDirectoryIfNotExists(const std::string &path) {
     const int error =
         mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     if (0 > error) {
-      printf("Error creating directory!n");
+      printf("Error creating directory! %s\n", path.c_str());
       exit(1);
     }
   }

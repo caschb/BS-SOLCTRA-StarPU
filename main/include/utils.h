@@ -11,6 +11,7 @@
 #include <cmath>
 #include <iostream>
 #include <mpi.h>
+#include <numbers>
 #include <string>
 #include <string_view>
 #include <vector>
