@@ -1,6 +1,4 @@
-#include <cmath>
 #include <cstdlib>
-#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <iostream>
@@ -8,7 +6,6 @@
 #include <ostream>
 #include <random>
 #include <solctra_multinode.h>
-#include <sstream>
 #include <starpu_mpi.h>
 #include <string>
 #include <utils.h>
