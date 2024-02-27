@@ -181,6 +181,35 @@ std::vector<int> initialize_shares_binomial(const unsigned int comm_size,
   return groupMyShare;
 }
 
+struct cl_params {
+  unsigned int steps;
+  double step_size;
+  unsigned int mode;
+};
+
+void run_particles_runner(void *buffers[], void *cl_arg)
+{
+  // struct cl_params *params = reinterpret_cast<struct cl_params *>(cl_arg);
+  auto steps = 100u;
+  auto step_size = 0.001; 
+  auto mode = 1u;
+  auto coils = *reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[0]));
+  auto e_roof = *reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[1]));
+  auto length_segments = *reinterpret_cast<LengthSegments *>(STARPU_VARIABLE_GET_PTR(buffers[2]));
+  auto local_particles_ptr = reinterpret_cast<Particle *>(STARPU_VECTOR_GET_PTR(buffers[3]));
+  auto local_particles_size = STARPU_VECTOR_GET_NX(buffers[3]);
+  auto local_particles = std::vector<Particle>(local_particles_ptr, local_particles_ptr + local_particles_size);
+
+  runParticles(coils, e_roof, length_segments, local_particles, steps,
+               step_size, mode);
+}
+
+struct starpu_codelet codelet = {
+  .cpu_funcs = {run_particles_runner},
+  .nbuffers = 4,
+  .modes = {STARPU_R, STARPU_R, STARPU_R, STARPU_RW}
+};
+
 int main(int argc, char **argv) {
   /*****MPI variable declarations and initializations**********/
   starpu_mpi_init_conf(&argc, &argv, 1, MPI_COMM_WORLD, nullptr);
@@ -192,12 +221,6 @@ int main(int argc, char **argv) {
   starpu_mpi_comm_size(MPI_COMM_WORLD, reinterpret_cast<int *>(&comm_size));
   starpu_mpi_comm_rank(MPI_COMM_WORLD, reinterpret_cast<int *>(&my_rank));
   MPI_Get_processor_name(processor_name, reinterpret_cast<int *>(&name_len));
-
-  /********Create MPI particle type*****************/
-  auto MPI_Cartesian = setupMPICartesianType();
-  auto MPI_Coil = setupMPIArray(MPI_Cartesian, TOTAL_OF_GRADES);
-  auto MPI_LengthSegment = setupMPIArray(MPI_DOUBLE, TOTAL_OF_GRADES);
-  /*************************************************/
 
   /*******Declaring program and runtime parameters*************/
   auto resource_path = DEFAULT_RESOURCES; // Coil directory path
@@ -271,23 +294,14 @@ int main(int argc, char **argv) {
   }
 
   /*********** Rank 0 distributes runtime parameters amongst ranks********/
-  MPI_Bcast(&steps, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&step_size, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&length, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&mode, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&debug_flag, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-
   int output_size = output.size();
-  MPI_Bcast(&output_size, 1, MPI_INT, 0, MPI_COMM_WORLD);
   if (0 != my_rank) {
     output.resize(output_size);
   }
-  MPI_Bcast(const_cast<char *>(output.data()), output_size, MPI_CHAR, 0,
-            MPI_COMM_WORLD);
   /*********** Rank 0 distributes runtime parameters amongst ranks********/
 
   /*********** Rank 0 reads in all particles ******/
-  std::vector<Particle> particles(length);
+  Particles particles(length);
 
   double startInitializationTime = 0.0;
   double endInitializationTime = 0.0;
@@ -316,15 +330,17 @@ int main(int argc, char **argv) {
     }
   }
 
-  MPI_Scatter(&groupMyShare.front(), 1, MPI_INT, &myShare, 1, MPI_INT, 0,
-              MPI_COMM_WORLD);
-  MPI_Bcast(&displacements.front(), comm_size, MPI_INT, 0, MPI_COMM_WORLD);
+  starpu_data_handle_t particles_handle;
+  starpu_vector_data_register(&particles_handle, STARPU_MAIN_RAM, (uintptr_t)&particles, particles.size(), sizeof(Particle));
+  starpu_mpi_data_register(particles_handle, 3, 0);
 
-  Particles local_particles(myShare);
+  struct starpu_data_filter particles_filter = {
+    .filter_func = starpu_vector_filter_list,
+    .nchildren = comm_size,
+    .filter_arg_ptr = groupMyShare.data()
+  };
 
-  MPI_Scatterv(particles.data(), groupMyShare.data(), displacements.data(),
-               MPI_Cartesian, local_particles.data(), myShare, MPI_Cartesian, 0,
-               MPI_COMM_WORLD);
+  starpu_data_partition(particles_handle, &particles_filter);
 
   Coils coils;
   Coils e_roof;
@@ -332,30 +348,56 @@ int main(int argc, char **argv) {
   if (my_rank == 0) {
     loadCoilData(coils, resource_path);
     computeERoof(coils, e_roof, length_segments);
+    if(magprof != 0)
+    {
+      std::cout << "Computing magnetic profiles" << std::endl;
+      computeMagneticProfile(coils, e_roof, length_segments, num_points,
+                            phi_angle, dimension);
+    }
   }
+  starpu_data_handle_t coils_handle;
+  starpu_variable_data_register(&coils_handle, STARPU_MAIN_RAM, (uintptr_t)&coils, sizeof(coils));
+  starpu_mpi_data_register(coils_handle, 0, 0);
 
-  MPI_Bcast(&coils.front(), TOTAL_OF_COILS, MPI_Coil, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&e_roof.front(), TOTAL_OF_COILS, MPI_Coil, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&length_segments.front(), TOTAL_OF_COILS, MPI_LengthSegment, 0,
-            MPI_COMM_WORLD);
+  starpu_data_handle_t e_roof_handle;
+  starpu_variable_data_register(&e_roof_handle, STARPU_MAIN_RAM, (uintptr_t)&e_roof_handle, sizeof(e_roof));
+  starpu_mpi_data_register(e_roof_handle, 1, 0);
 
-  if (my_rank == 0 && magprof != 0) {
-    std::cout << "Computing magnetic profiles" << std::endl;
-    computeMagneticProfile(coils, e_roof, length_segments, num_points,
-                           phi_angle, dimension);
-  }
-
-  MPI_Barrier(MPI_COMM_WORLD);
+  starpu_data_handle_t length_segments_handle;
+  starpu_variable_data_register(&length_segments_handle, STARPU_MAIN_RAM, (uintptr_t)&length_segments, sizeof(length_segments));
+  starpu_mpi_data_register(length_segments_handle, 2, 0);
 
   double startTime = 0;
   double endTime = 0;
+  struct cl_params params = { steps, step_size, mode };
   if (my_rank == 0) {
     startTime = MPI_Wtime();
     std::cout << "Executing simulation" << std::endl;
   }
-  runParticles(coils, e_roof, length_segments, local_particles, steps,
-               step_size, mode);
-  MPI_Barrier(MPI_COMM_WORLD);
+
+  for(unsigned int i = 0; i < comm_size; ++i)
+  {
+    starpu_data_handle_t sub_particles_handle = starpu_data_get_sub_data(particles_handle, 1, i);
+    starpu_mpi_data_register(sub_particles_handle, (i + 1) * 10, 0);
+    struct starpu_task * task = starpu_mpi_task_build(MPI_COMM_WORLD, &codelet,
+        STARPU_R, coils_handle,
+        STARPU_R, e_roof_handle,
+        STARPU_R, length_segments_handle,
+        STARPU_RW, sub_particles_handle, 0);
+    if(task)
+    {
+      starpu_task_submit(task);
+    }
+    starpu_mpi_task_post_build(MPI_COMM_WORLD, &codelet,
+        STARPU_R, coils_handle,
+        STARPU_R, e_roof_handle,
+        STARPU_R, length_segments_handle,
+        STARPU_RW, sub_particles_handle, 0);
+  }
+
+  starpu_task_wait_for_all();
+
+  starpu_mpi_shutdown();
 
   if (my_rank == 0) {
     endTime = MPI_Wtime();
@@ -380,6 +422,5 @@ int main(int argc, char **argv) {
     std::cout << "Timestamp: " << dt << std::endl;
   }
 
-  MPI_Finalize();
   return 0;
 }
