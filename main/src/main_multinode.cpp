@@ -212,7 +212,8 @@ struct starpu_codelet codelet = {
 
 int main(int argc, char **argv) {
   /*****MPI variable declarations and initializations**********/
-  starpu_mpi_init_conf(&argc, &argv, 1, MPI_COMM_WORLD, nullptr);
+  starpu_init(nullptr);
+  starpu_mpi_init(&argc, &argv, 1);
 
   auto my_rank = 0u;
   auto comm_size = 0u;
@@ -374,6 +375,7 @@ int main(int argc, char **argv) {
     startTime = MPI_Wtime();
     std::cout << "Executing simulation" << std::endl;
   }
+  int result = -1;
 
   for(unsigned int i = 0; i < comm_size; ++i)
   {
@@ -386,7 +388,9 @@ int main(int argc, char **argv) {
         STARPU_RW, sub_particles_handle, 0);
     if(task)
     {
-      starpu_task_submit(task);
+      result = starpu_task_submit(task);
+	    STARPU_CHECK_RETURN_VALUE(result, "starpu_task_submit");
+      std::cout << result << '\n';
     }
     starpu_mpi_task_post_build(MPI_COMM_WORLD, &codelet,
         STARPU_R, coils_handle,
