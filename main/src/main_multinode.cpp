@@ -364,27 +364,27 @@ int main(int argc, char **argv) {
   }
   starpu_data_handle_t coils_handle;
   starpu_variable_data_register(&coils_handle, STARPU_MAIN_RAM, (uintptr_t)&coils, sizeof(coils));
-  starpu_mpi_data_register(coils_handle, 0, 0);
+  starpu_mpi_data_register(coils_handle, 1, 0);
 
   starpu_data_handle_t e_roof_handle;
   starpu_variable_data_register(&e_roof_handle, STARPU_MAIN_RAM, (uintptr_t)&e_roof_handle, sizeof(e_roof));
-  starpu_mpi_data_register(e_roof_handle, 1, 0);
+  starpu_mpi_data_register(e_roof_handle, 2, 0);
 
   starpu_data_handle_t length_segments_handle;
   starpu_variable_data_register(&length_segments_handle, STARPU_MAIN_RAM, (uintptr_t)&length_segments, sizeof(length_segments));
-  starpu_mpi_data_register(length_segments_handle, 2, 0);
+  starpu_mpi_data_register(length_segments_handle, 3, 0);
 
   starpu_data_handle_t steps_handle;
   starpu_variable_data_register(&steps_handle, STARPU_MAIN_RAM, (uintptr_t)&steps, sizeof(steps));
-  starpu_mpi_data_register(steps_handle, 3, 0);
+  starpu_mpi_data_register(steps_handle, 4, 0);
 
   starpu_data_handle_t step_size_handle;
   starpu_variable_data_register(&step_size_handle, STARPU_MAIN_RAM, (uintptr_t)&step_size, sizeof(step_size));
-  starpu_mpi_data_register(step_size_handle, 4, 0);
+  starpu_mpi_data_register(step_size_handle, 5, 0);
 
   starpu_data_handle_t mode_handle;
   starpu_variable_data_register(&mode_handle, STARPU_MAIN_RAM, (uintptr_t)&mode, sizeof(mode));
-  starpu_mpi_data_register(mode_handle, 5, 0);
+  starpu_mpi_data_register(mode_handle, 6, 0);
 
   double startTime = 0;
   double endTime = 0;
@@ -395,37 +395,35 @@ int main(int argc, char **argv) {
   int result = -1;
   uintptr_t ids[4] = {0, 1, 2, 3};
 
-  // for(unsigned int i = 0; i < comm_size; ++i)
-  // {
-  //   starpu_data_handle_t sub_particles_handle = starpu_data_get_sub_data(particles_handle, 1, i);
-  //   starpu_mpi_data_register(sub_particles_handle, (i + 1) * 10, 0);
-  //   starpu_data_handle_t id_handle;
-  //   starpu_variable_data_register(&id_handle, STARPU_MAIN_RAM, (uintptr_t)&ids[i], sizeof(ids[i]));
-  //   starpu_mpi_data_register(id_handle, (i + 1) * 100, 0);
-  //   struct starpu_task * task = starpu_mpi_task_build(MPI_COMM_WORLD, &codelet,
-  //       STARPU_R, coils_handle,
-  //       STARPU_R, e_roof_handle,
-  //       STARPU_R, length_segments_handle,
-  //       STARPU_R, steps_handle,
-  //       STARPU_R, step_size_handle,
-  //       STARPU_R, mode_handle,
-  //       STARPU_R, id_handle,
-  //       STARPU_RW, sub_particles_handle, 0);
-  //   if(task)
-  //   {
-  //     result = starpu_task_submit(task);
-	 //    STARPU_CHECK_RETURN_VALUE(result, "starpu_task_submit");
-  //   }
-  //   starpu_mpi_task_post_build(MPI_COMM_WORLD, &codelet,
-  //       STARPU_R, coils_handle,
-  //       STARPU_R, e_roof_handle,
-  //       STARPU_R, length_segments_handle,
-  //       STARPU_R, steps_handle,
-  //       STARPU_R, step_size_handle,
-  //       STARPU_R, mode_handle,
-  //       STARPU_R, id_handle,
-  //       STARPU_RW, sub_particles_handle, 0);
-  // }
+  for(unsigned int i = 0; i < comm_size; ++i)
+  {
+    starpu_data_handle_t id_handle;
+    starpu_variable_data_register(&id_handle, STARPU_MAIN_RAM, (uintptr_t)&ids[i], sizeof(ids[i]));
+    starpu_mpi_data_register(id_handle, (i + 1) * 10, 0);
+    struct starpu_task * task = starpu_mpi_task_build(MPI_COMM_WORLD, &codelet,
+        STARPU_R, coils_handle,
+        STARPU_R, e_roof_handle,
+        STARPU_R, length_segments_handle,
+        STARPU_R, steps_handle,
+        STARPU_R, step_size_handle,
+        STARPU_R, mode_handle,
+        STARPU_R, id_handle,
+        STARPU_RW, particles_handle, 0);
+    if(task)
+    {
+      result = starpu_task_submit(task);
+	    STARPU_CHECK_RETURN_VALUE(result, "starpu_task_submit");
+    }
+    starpu_mpi_task_post_build(MPI_COMM_WORLD, &codelet,
+        STARPU_R, coils_handle,
+        STARPU_R, e_roof_handle,
+        STARPU_R, length_segments_handle,
+        STARPU_R, steps_handle,
+        STARPU_R, step_size_handle,
+        STARPU_R, mode_handle,
+        STARPU_R, id_handle,
+        STARPU_RW, particles_handle, 0);
+  }
 
   starpu_task_wait_for_all();
   starpu_mpi_shutdown();
