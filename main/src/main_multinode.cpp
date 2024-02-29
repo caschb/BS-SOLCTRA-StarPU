@@ -189,8 +189,8 @@ struct cl_params {
 
 void run_particles_runner(void *buffers[], void *cl_arg)
 {
-  // struct cl_params *params = reinterpret_cast<struct cl_params *>(cl_arg);
-  auto steps = 100u;
+  struct cl_params *params = reinterpret_cast<struct cl_params *>(cl_arg);
+  auto steps = 256u;
   auto step_size = 0.001; 
   auto mode = 1u;
   auto coils = *reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[0]));
@@ -390,7 +390,7 @@ int main(int argc, char **argv) {
     {
       result = starpu_task_submit(task);
 	    STARPU_CHECK_RETURN_VALUE(result, "starpu_task_submit");
-      std::cout << result << '\n';
+      std::cout << "Erm what the flip?\t" << result << '\n';
     }
     starpu_mpi_task_post_build(MPI_COMM_WORLD, &codelet,
         STARPU_R, coils_handle,
@@ -400,8 +400,9 @@ int main(int argc, char **argv) {
   }
 
   starpu_task_wait_for_all();
-
   starpu_mpi_shutdown();
+
+  std::cout << "Aw come one man\n";
 
   if (my_rank == 0) {
     endTime = MPI_Wtime();

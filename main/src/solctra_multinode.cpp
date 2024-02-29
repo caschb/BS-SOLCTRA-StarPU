@@ -164,10 +164,10 @@ void runParticles(Coils &coils, Coils &e_roof, LengthSegments &length_segments,
                   Particles &particles,
                   const unsigned int steps, const double &step_size,
                   const unsigned int mode) {
-
   auto divergenceCounter = 0;
 
   for (unsigned int step = 1; step <= steps; ++step) {
+    std::cout << step << '\n';
     for (auto &particle : particles) {
       if ((particle.x == MINOR_RADIUS) && (particle.y == MINOR_RADIUS) &&
           (particle.z == MINOR_RADIUS)) {
