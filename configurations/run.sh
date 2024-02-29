@@ -1,6 +1,6 @@
 ID=$1
 
-mpiexec -np 4\
+STARPU_RESERVE_NCPU=1 STARPU_WORKERS_GETBIND=0 mpiexec -np 4\
     ../build/main/bs_solctra\
     -length 1024\
     -particles ../data/input_1000.txt\

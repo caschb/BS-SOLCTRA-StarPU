@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
@@ -174,40 +175,36 @@ std::vector<int> initialize_shares_binomial(const unsigned int comm_size,
     groupMyShare[rank] += 1;
   }
 
-  for (unsigned int i = 0; i < comm_size; ++i) {
-    std::cout << i << '\t' << groupMyShare[i] << '\n';
-  }
+  // for (unsigned int i = 0; i < comm_size; ++i) {
+  //   std::cout << i << '\t' << groupMyShare[i] << '\n';
+  // }
 
   return groupMyShare;
 }
 
-struct cl_params {
-  unsigned int steps;
-  double step_size;
-  unsigned int mode;
-};
 
 void run_particles_runner(void *buffers[], void *cl_arg)
 {
-  struct cl_params *params = reinterpret_cast<struct cl_params *>(cl_arg);
-  auto steps = 256u;
-  auto step_size = 0.001; 
-  auto mode = 1u;
+  (void) cl_arg;
   auto coils = *reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[0]));
   auto e_roof = *reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[1]));
   auto length_segments = *reinterpret_cast<LengthSegments *>(STARPU_VARIABLE_GET_PTR(buffers[2]));
-  auto local_particles_ptr = reinterpret_cast<Particle *>(STARPU_VECTOR_GET_PTR(buffers[3]));
-  auto local_particles_size = STARPU_VECTOR_GET_NX(buffers[3]);
+  auto steps = *reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[3]));
+  auto step_size = *reinterpret_cast<double *>(STARPU_VARIABLE_GET_PTR(buffers[4]));
+  auto mode = *reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[5]));
+  auto id = *reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[6]));
+  auto local_particles_ptr = reinterpret_cast<Particle *>(STARPU_VECTOR_GET_PTR(buffers[7]));
+  auto local_particles_size = STARPU_VECTOR_GET_NX(buffers[7]);
   auto local_particles = std::vector<Particle>(local_particles_ptr, local_particles_ptr + local_particles_size);
-
-  runParticles(coils, e_roof, length_segments, local_particles, steps,
-               step_size, mode);
+  printIterationFileTxt(local_particles, 0, id, "out");
+  // runParticles(coils, e_roof, length_segments, local_particles, steps,
+  //              step_size, mode, id);
 }
 
 struct starpu_codelet codelet = {
   .cpu_funcs = {run_particles_runner},
-  .nbuffers = 4,
-  .modes = {STARPU_R, STARPU_R, STARPU_R, STARPU_RW}
+  .nbuffers = 8,
+  .modes = {STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_RW}
 };
 
 int main(int argc, char **argv) {
@@ -222,6 +219,8 @@ int main(int argc, char **argv) {
   starpu_mpi_comm_size(MPI_COMM_WORLD, reinterpret_cast<int *>(&comm_size));
   starpu_mpi_comm_rank(MPI_COMM_WORLD, reinterpret_cast<int *>(&my_rank));
   MPI_Get_processor_name(processor_name, reinterpret_cast<int *>(&name_len));
+
+  auto *MPI_Cartesian = setupMPICartesianType();
 
   /*******Declaring program and runtime parameters*************/
   auto resource_path = DEFAULT_RESOURCES; // Coil directory path
@@ -308,7 +307,7 @@ int main(int argc, char **argv) {
   double endInitializationTime = 0.0;
   std::vector<int> displacements(comm_size);
   std::vector<int> groupMyShare(comm_size);
-  int myShare;
+  int myShare = 0;
 
   // Only rank 0 reads the information from the input file
   if (my_rank == 0) {
@@ -329,19 +328,26 @@ int main(int argc, char **argv) {
     for (unsigned int i = 1; i < comm_size; i++) {
       displacements[i] = displacements[i - 1] + groupMyShare[i - 1];
     }
+    printIterationFileTxt(particles, 0, 0, output);
   }
+  MPI_Scatter(&groupMyShare.front(), 1, MPI_INT, &myShare, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  std::cout << my_rank << '\t' << myShare << '\n';
+
+  Particles local_particles(myShare);
+
+  MPI_Scatterv(particles.data(),
+      groupMyShare.data(),
+      displacements.data(),
+      MPI_Cartesian,
+      local_particles.data(),
+      myShare,
+      MPI_Cartesian,
+      0,
+      MPI_COMM_WORLD);
 
   starpu_data_handle_t particles_handle;
-  starpu_vector_data_register(&particles_handle, STARPU_MAIN_RAM, (uintptr_t)&particles, particles.size(), sizeof(Particle));
-  starpu_mpi_data_register(particles_handle, 3, 0);
-
-  struct starpu_data_filter particles_filter = {
-    .filter_func = starpu_vector_filter_list,
-    .nchildren = comm_size,
-    .filter_arg_ptr = groupMyShare.data()
-  };
-
-  starpu_data_partition(particles_handle, &particles_filter);
+  starpu_vector_data_register(&particles_handle, STARPU_MAIN_RAM, (uintptr_t)&local_particles, local_particles.size(), sizeof(Particle));
+  starpu_mpi_data_register(particles_handle, my_rank * 1000, my_rank);
 
   Coils coils;
   Coils e_roof;
@@ -368,41 +374,61 @@ int main(int argc, char **argv) {
   starpu_variable_data_register(&length_segments_handle, STARPU_MAIN_RAM, (uintptr_t)&length_segments, sizeof(length_segments));
   starpu_mpi_data_register(length_segments_handle, 2, 0);
 
+  starpu_data_handle_t steps_handle;
+  starpu_variable_data_register(&steps_handle, STARPU_MAIN_RAM, (uintptr_t)&steps, sizeof(steps));
+  starpu_mpi_data_register(steps_handle, 3, 0);
+
+  starpu_data_handle_t step_size_handle;
+  starpu_variable_data_register(&step_size_handle, STARPU_MAIN_RAM, (uintptr_t)&step_size, sizeof(step_size));
+  starpu_mpi_data_register(step_size_handle, 4, 0);
+
+  starpu_data_handle_t mode_handle;
+  starpu_variable_data_register(&mode_handle, STARPU_MAIN_RAM, (uintptr_t)&mode, sizeof(mode));
+  starpu_mpi_data_register(mode_handle, 5, 0);
+
   double startTime = 0;
   double endTime = 0;
-  struct cl_params params = { steps, step_size, mode };
   if (my_rank == 0) {
     startTime = MPI_Wtime();
     std::cout << "Executing simulation" << std::endl;
   }
   int result = -1;
+  uintptr_t ids[4] = {0, 1, 2, 3};
 
-  for(unsigned int i = 0; i < comm_size; ++i)
-  {
-    starpu_data_handle_t sub_particles_handle = starpu_data_get_sub_data(particles_handle, 1, i);
-    starpu_mpi_data_register(sub_particles_handle, (i + 1) * 10, 0);
-    struct starpu_task * task = starpu_mpi_task_build(MPI_COMM_WORLD, &codelet,
-        STARPU_R, coils_handle,
-        STARPU_R, e_roof_handle,
-        STARPU_R, length_segments_handle,
-        STARPU_RW, sub_particles_handle, 0);
-    if(task)
-    {
-      result = starpu_task_submit(task);
-	    STARPU_CHECK_RETURN_VALUE(result, "starpu_task_submit");
-      std::cout << "Erm what the flip?\t" << result << '\n';
-    }
-    starpu_mpi_task_post_build(MPI_COMM_WORLD, &codelet,
-        STARPU_R, coils_handle,
-        STARPU_R, e_roof_handle,
-        STARPU_R, length_segments_handle,
-        STARPU_RW, sub_particles_handle, 0);
-  }
+  // for(unsigned int i = 0; i < comm_size; ++i)
+  // {
+  //   starpu_data_handle_t sub_particles_handle = starpu_data_get_sub_data(particles_handle, 1, i);
+  //   starpu_mpi_data_register(sub_particles_handle, (i + 1) * 10, 0);
+  //   starpu_data_handle_t id_handle;
+  //   starpu_variable_data_register(&id_handle, STARPU_MAIN_RAM, (uintptr_t)&ids[i], sizeof(ids[i]));
+  //   starpu_mpi_data_register(id_handle, (i + 1) * 100, 0);
+  //   struct starpu_task * task = starpu_mpi_task_build(MPI_COMM_WORLD, &codelet,
+  //       STARPU_R, coils_handle,
+  //       STARPU_R, e_roof_handle,
+  //       STARPU_R, length_segments_handle,
+  //       STARPU_R, steps_handle,
+  //       STARPU_R, step_size_handle,
+  //       STARPU_R, mode_handle,
+  //       STARPU_R, id_handle,
+  //       STARPU_RW, sub_particles_handle, 0);
+  //   if(task)
+  //   {
+  //     result = starpu_task_submit(task);
+	 //    STARPU_CHECK_RETURN_VALUE(result, "starpu_task_submit");
+  //   }
+  //   starpu_mpi_task_post_build(MPI_COMM_WORLD, &codelet,
+  //       STARPU_R, coils_handle,
+  //       STARPU_R, e_roof_handle,
+  //       STARPU_R, length_segments_handle,
+  //       STARPU_R, steps_handle,
+  //       STARPU_R, step_size_handle,
+  //       STARPU_R, mode_handle,
+  //       STARPU_R, id_handle,
+  //       STARPU_RW, sub_particles_handle, 0);
+  // }
 
   starpu_task_wait_for_all();
   starpu_mpi_shutdown();
-
-  std::cout << "Aw come one man\n";
 
   if (my_rank == 0) {
     endTime = MPI_Wtime();
