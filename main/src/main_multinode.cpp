@@ -85,8 +85,7 @@ unsigned getDebugFromArgs(const int &argc, char **argv) {
     std::string tmp = argv[i];
     if (tmp == "-d") {
       return static_cast<unsigned>(atoi(argv[i + 1]));
-    }
-  }
+    } }
   return DEFAULT_DEBUG;
 }
 
@@ -186,31 +185,31 @@ std::vector<int> initialize_shares_binomial(const unsigned int comm_size,
 void run_particles_runner(void *buffers[], void *cl_arg)
 {
   (void) cl_arg;
-  auto coils = *reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[0]));
-  auto e_roof = *reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[1]));
-  auto length_segments = *reinterpret_cast<LengthSegments *>(STARPU_VARIABLE_GET_PTR(buffers[2]));
-  auto steps = *reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[3]));
-  auto step_size = *reinterpret_cast<double *>(STARPU_VARIABLE_GET_PTR(buffers[4]));
-  auto mode = *reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[5]));
-  auto id = *reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[6]));
-  auto local_particles_ptr = reinterpret_cast<Particle *>(STARPU_VECTOR_GET_PTR(buffers[7]));
-  auto local_particles_size = STARPU_VECTOR_GET_NX(buffers[7]);
+  auto coils = reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[0]));
+  auto e_roof = reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[1]));
+  auto length_segments = reinterpret_cast<LengthSegments *>(STARPU_VARIABLE_GET_PTR(buffers[2]));
+  auto steps = reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[3]));
+  auto step_size = reinterpret_cast<double *>(STARPU_VARIABLE_GET_PTR(buffers[4]));
+  auto mode = reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[5]));
+  auto local_particles_ptr = reinterpret_cast<Particle *>(STARPU_VECTOR_GET_PTR(buffers[6]));
+  auto local_particles_size = STARPU_VECTOR_GET_NX(buffers[6]);
   auto local_particles = std::vector<Particle>(local_particles_ptr, local_particles_ptr + local_particles_size);
-  printIterationFileTxt(local_particles, 0, id, "out");
-  // runParticles(coils, e_roof, length_segments, local_particles, steps,
-  //              step_size, mode, id);
+  int my_rank = 0;
+  starpu_mpi_comm_rank(MPI_COMM_WORLD, &my_rank);
+  runParticles(*coils, *e_roof, *length_segments, local_particles, *steps,
+               *step_size, *mode, my_rank);
 }
 
 struct starpu_codelet codelet = {
   .cpu_funcs = {run_particles_runner},
-  .nbuffers = 8,
-  .modes = {STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_RW}
+  .nbuffers = 7,
+  .modes = {STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_RW}
 };
 
 int main(int argc, char **argv) {
   /*****MPI variable declarations and initializations**********/
-  starpu_init(nullptr);
-  starpu_mpi_init(&argc, &argv, 1);
+  int ret = starpu_mpi_init_conf(&argc, &argv, 1, MPI_COMM_WORLD, nullptr);
+	STARPU_CHECK_RETURN_VALUE(ret, "starpu_mpi_init_conf");
 
   auto my_rank = 0u;
   auto comm_size = 0u;
@@ -219,8 +218,6 @@ int main(int argc, char **argv) {
   starpu_mpi_comm_size(MPI_COMM_WORLD, reinterpret_cast<int *>(&comm_size));
   starpu_mpi_comm_rank(MPI_COMM_WORLD, reinterpret_cast<int *>(&my_rank));
   MPI_Get_processor_name(processor_name, reinterpret_cast<int *>(&name_len));
-
-  auto *MPI_Cartesian = setupMPICartesianType();
 
   /*******Declaring program and runtime parameters*************/
   auto resource_path = DEFAULT_RESOURCES; // Coil directory path
@@ -328,26 +325,31 @@ int main(int argc, char **argv) {
     for (unsigned int i = 1; i < comm_size; i++) {
       displacements[i] = displacements[i - 1] + groupMyShare[i - 1];
     }
-    printIterationFileTxt(particles, 0, 0, output);
+    // printIterationFileTxt(particles, 0, 0, output);
   }
-  MPI_Scatter(&groupMyShare.front(), 1, MPI_INT, &myShare, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  std::cout << my_rank << '\t' << myShare << '\n';
 
-  Particles local_particles(myShare);
-
-  MPI_Scatterv(particles.data(),
-      groupMyShare.data(),
-      displacements.data(),
-      MPI_Cartesian,
-      local_particles.data(),
-      myShare,
-      MPI_Cartesian,
-      0,
-      MPI_COMM_WORLD);
+  MPI_Bcast(groupMyShare.data(), groupMyShare.size(), MPI_INT, 0, MPI_COMM_WORLD);
 
   starpu_data_handle_t particles_handle;
-  starpu_vector_data_register(&particles_handle, STARPU_MAIN_RAM, (uintptr_t)&local_particles, local_particles.size(), sizeof(Particle));
-  starpu_mpi_data_register(particles_handle, my_rank * 1000, my_rank);
+
+  if(my_rank == 0)
+  {
+    starpu_vector_data_register(&particles_handle, STARPU_MAIN_RAM, (uintptr_t)particles.data(), particles.size(), sizeof(Particle));
+  }
+  else
+  {
+    starpu_vector_data_register(&particles_handle, -1, (uintptr_t)nullptr, length, sizeof(Particle));
+  }
+
+  struct starpu_data_filter particles_filter = {
+    .filter_func = starpu_vector_filter_list,
+    .nchildren = comm_size,
+    .filter_arg_ptr = groupMyShare.data()
+  };
+
+  starpu_data_handle_t *particles_handles = new starpu_data_handle_t[comm_size];
+  starpu_data_partition_plan(particles_handle, &particles_filter, particles_handles);
+  starpu_data_partition_submit(particles_handle, comm_size, particles_handles);
 
   Coils coils;
   Coils e_roof;
@@ -363,28 +365,39 @@ int main(int argc, char **argv) {
     }
   }
   starpu_data_handle_t coils_handle;
-  starpu_variable_data_register(&coils_handle, STARPU_MAIN_RAM, (uintptr_t)&coils, sizeof(coils));
-  starpu_mpi_data_register(coils_handle, 1, 0);
-
   starpu_data_handle_t e_roof_handle;
-  starpu_variable_data_register(&e_roof_handle, STARPU_MAIN_RAM, (uintptr_t)&e_roof_handle, sizeof(e_roof));
-  starpu_mpi_data_register(e_roof_handle, 2, 0);
-
   starpu_data_handle_t length_segments_handle;
-  starpu_variable_data_register(&length_segments_handle, STARPU_MAIN_RAM, (uintptr_t)&length_segments, sizeof(length_segments));
-  starpu_mpi_data_register(length_segments_handle, 3, 0);
-
   starpu_data_handle_t steps_handle;
-  starpu_variable_data_register(&steps_handle, STARPU_MAIN_RAM, (uintptr_t)&steps, sizeof(steps));
-  starpu_mpi_data_register(steps_handle, 4, 0);
-
   starpu_data_handle_t step_size_handle;
-  starpu_variable_data_register(&step_size_handle, STARPU_MAIN_RAM, (uintptr_t)&step_size, sizeof(step_size));
-  starpu_mpi_data_register(step_size_handle, 5, 0);
-
   starpu_data_handle_t mode_handle;
-  starpu_variable_data_register(&mode_handle, STARPU_MAIN_RAM, (uintptr_t)&mode, sizeof(mode));
+
+  if(my_rank == 0)
+  {
+    starpu_variable_data_register(&coils_handle, STARPU_MAIN_RAM, (uintptr_t)&coils, sizeof(coils));
+    starpu_variable_data_register(&e_roof_handle, STARPU_MAIN_RAM, (uintptr_t)&e_roof_handle, sizeof(e_roof));
+    starpu_variable_data_register(&length_segments_handle, STARPU_MAIN_RAM, (uintptr_t)&length_segments, sizeof(length_segments));
+    starpu_variable_data_register(&steps_handle, STARPU_MAIN_RAM, (uintptr_t)&steps, sizeof(steps));
+    starpu_variable_data_register(&step_size_handle, STARPU_MAIN_RAM, (uintptr_t)&step_size, sizeof(step_size));
+    starpu_variable_data_register(&mode_handle, STARPU_MAIN_RAM, (uintptr_t)&mode, sizeof(mode));
+  }
+  else
+  {
+    starpu_variable_data_register(&coils_handle, -1, (uintptr_t)nullptr, sizeof(coils));
+    starpu_variable_data_register(&e_roof_handle, -1, (uintptr_t)nullptr, sizeof(e_roof));
+    starpu_variable_data_register(&length_segments_handle, -1, (uintptr_t)nullptr, sizeof(length_segments));
+    starpu_variable_data_register(&steps_handle, -1, (uintptr_t)nullptr, sizeof(steps));
+    starpu_variable_data_register(&step_size_handle, -1, (uintptr_t)nullptr, sizeof(step_size));
+    starpu_variable_data_register(&mode_handle, -1, (uintptr_t)nullptr, sizeof(mode));
+  }
+
+  starpu_mpi_data_register(coils_handle, 1, 0);
+  starpu_mpi_data_register(e_roof_handle, 2, 0);
+  starpu_mpi_data_register(length_segments_handle, 3, 0);
+  starpu_mpi_data_register(steps_handle, 4, 0);
+  starpu_mpi_data_register(step_size_handle, 5, 0);
   starpu_mpi_data_register(mode_handle, 6, 0);
+
+  MPI_Barrier(MPI_COMM_WORLD);
 
   double startTime = 0;
   double endTime = 0;
@@ -392,41 +405,24 @@ int main(int argc, char **argv) {
     startTime = MPI_Wtime();
     std::cout << "Executing simulation" << std::endl;
   }
-  int result = -1;
-  uintptr_t ids[4] = {0, 1, 2, 3};
 
   for(unsigned int i = 0; i < comm_size; ++i)
   {
-    starpu_data_handle_t id_handle;
-    starpu_variable_data_register(&id_handle, STARPU_MAIN_RAM, (uintptr_t)&ids[i], sizeof(ids[i]));
-    starpu_mpi_data_register(id_handle, (i + 1) * 10, 0);
-    struct starpu_task * task = starpu_mpi_task_build(MPI_COMM_WORLD, &codelet,
+    starpu_mpi_data_register(particles_handles[i], (i + 1) * 100, 0);
+    ret = starpu_mpi_task_insert(MPI_COMM_WORLD, &codelet,
         STARPU_R, coils_handle,
         STARPU_R, e_roof_handle,
         STARPU_R, length_segments_handle,
         STARPU_R, steps_handle,
         STARPU_R, step_size_handle,
         STARPU_R, mode_handle,
-        STARPU_R, id_handle,
-        STARPU_RW, particles_handle, 0);
-    if(task)
-    {
-      result = starpu_task_submit(task);
-	    STARPU_CHECK_RETURN_VALUE(result, "starpu_task_submit");
-    }
-    starpu_mpi_task_post_build(MPI_COMM_WORLD, &codelet,
-        STARPU_R, coils_handle,
-        STARPU_R, e_roof_handle,
-        STARPU_R, length_segments_handle,
-        STARPU_R, steps_handle,
-        STARPU_R, step_size_handle,
-        STARPU_R, mode_handle,
-        STARPU_R, id_handle,
-        STARPU_RW, particles_handle, 0);
+        STARPU_RW, particles_handles[i], 
+        STARPU_EXECUTE_ON_NODE, i,
+        0);
+    STARPU_CHECK_RETURN_VALUE(ret, "starpu_mpi_task_insert");
   }
 
-  starpu_task_wait_for_all();
-  starpu_mpi_shutdown();
+  starpu_mpi_wait_for_all(MPI_COMM_WORLD);
 
   if (my_rank == 0) {
     endTime = MPI_Wtime();
@@ -450,6 +446,8 @@ int main(int argc, char **argv) {
 
     std::cout << "Timestamp: " << dt << std::endl;
   }
+  delete [] particles_handles;
 
+  starpu_mpi_shutdown();
   return 0;
 }

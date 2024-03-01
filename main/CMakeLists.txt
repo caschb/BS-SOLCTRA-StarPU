@@ -6,6 +6,9 @@ target_include_directories(${EXECUTABLE_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_D
 find_package(MPI REQUIRED)
 target_link_libraries(${EXECUTABLE_TARGET} PRIVATE MPI::MPI_CXX)
 
+find_package(OpenMP REQUIRED)
+target_link_libraries(${EXECUTABLE_TARGET} PRIVATE OpenMP::OpenMP_CXX)
+
 find_package(Threads REQUIRED)
 target_link_libraries(${EXECUTABLE_TARGET} PRIVATE Threads::Threads)
 
