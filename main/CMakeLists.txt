@@ -1,6 +1,6 @@
 set(EXECUTABLE_TARGET bs_solctra)
 
-add_executable(${EXECUTABLE_TARGET} src/main_multinode.cpp src/solctra_multinode.cpp src/utils.cpp)
+add_executable(${EXECUTABLE_TARGET} src/main_multinode.cpp src/solctra_multinode.cpp src/utils.cpp src/solctra_cuda.cu)
 target_include_directories(${EXECUTABLE_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 find_package(MPI REQUIRED)

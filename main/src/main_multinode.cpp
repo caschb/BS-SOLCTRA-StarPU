@@ -11,6 +11,7 @@
 #include <string>
 #include <utils.h>
 #include <vector>
+#include <solctra_cuda.cuh>
 
 constexpr auto DEFAULT_STEPS = 100000u;
 constexpr auto DEFAULT_STEP_SIZE = 0.001;
