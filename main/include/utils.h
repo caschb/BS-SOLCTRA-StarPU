@@ -36,6 +36,7 @@ constexpr auto MINOR_RADIUS = 0.0944165;
 constexpr auto MAJOR_RADIUS = 0.2381;
 constexpr auto TOTAL_OF_GRADES = 360;
 constexpr auto TOTAL_OF_COILS = 12;
+constexpr auto threads_per_block = 1024;
 
 using Coil = std::array<Cartesian, TOTAL_OF_GRADES + 1>;
 using Coils = std::array<Coil, TOTAL_OF_COILS>;

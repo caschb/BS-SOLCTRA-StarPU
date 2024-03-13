@@ -16,7 +16,7 @@
 constexpr auto DEFAULT_STEPS = 100000u;
 constexpr auto DEFAULT_STEP_SIZE = 0.001;
 constexpr auto DEFAULT_MODE = 1u;
-constexpr auto DEFAULT_RESOURCES = std::string("resources");
+const auto DEFAULT_RESOURCES = std::string("resources");
 constexpr auto DEFAULT_MAGPROF = 0u;
 constexpr auto DEFAULT_NUM_POINTS = 10000u;
 constexpr auto DEFAULT_PHI_ANGLE = 0;
@@ -201,8 +201,24 @@ void run_particles_runner(void *buffers[], void *cl_arg)
                *step_size, *mode, my_rank);
 }
 
+void run_particles_runner_gpu(void *buffers[], void *cl_arg)
+{
+  (void) cl_arg;
+  auto coils = reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[0]));
+  auto e_roof = reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[1]));
+  auto length_segments = reinterpret_cast<LengthSegments *>(STARPU_VARIABLE_GET_PTR(buffers[2]));
+  auto steps = *reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[3]));
+  auto step_size = *reinterpret_cast<double *>(STARPU_VARIABLE_GET_PTR(buffers[4]));
+  auto local_particles_ptr = reinterpret_cast<Particle *>(STARPU_VECTOR_GET_PTR(buffers[6]));
+  auto local_particles_size = STARPU_VECTOR_GET_NX(buffers[6]);
+  auto total_blocks = local_particles_size / threads_per_block;
+
+  runParticles_gpu<<<total_blocks, threads_per_block>>>(coils, e_roof, length_segments, local_particles_ptr, local_particles_size, steps, step_size);
+}
+
 struct starpu_codelet codelet = {
   .cpu_funcs = {run_particles_runner},
+  .cuda_funcs = {run_particles_runner_gpu},
   .nbuffers = 7,
   .modes = {STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_RW}
 };
@@ -305,7 +321,6 @@ int main(int argc, char **argv) {
   double endInitializationTime = 0.0;
   std::vector<int> displacements(comm_size);
   std::vector<int> groupMyShare(comm_size);
-  int myShare = 0;
 
   // Only rank 0 reads the information from the input file
   if (my_rank == 0) {

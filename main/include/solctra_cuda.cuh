@@ -4,6 +4,6 @@
 #include <utils.h>
 
 __global__ void runParticles_gpu(Coils *coils, Coils *e_roof, LengthSegments *length_segments,
-                  Particle *particles,
+                  Particle *particles, const size_t total_particles,
                   const unsigned int steps, const double step_size);
 #endif
