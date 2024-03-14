@@ -217,7 +217,7 @@ void run_particles_runner_gpu(void *buffers[], void *cl_arg)
 }
 
 struct starpu_codelet codelet = {
-  .cpu_funcs = {run_particles_runner},
+  //.cpu_funcs = {run_particles_runner},
   .cuda_funcs = {run_particles_runner_gpu},
   .nbuffers = 7,
   .modes = {STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_RW}
