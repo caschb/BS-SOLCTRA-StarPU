@@ -207,18 +207,23 @@ void run_particles_runner_gpu(void *buffers[], void *cl_arg)
   auto coils = reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[0]));
   auto e_roof = reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[1]));
   auto length_segments = reinterpret_cast<LengthSegments *>(STARPU_VARIABLE_GET_PTR(buffers[2]));
-  auto steps = *reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[3]));
-  auto step_size = *reinterpret_cast<double *>(STARPU_VARIABLE_GET_PTR(buffers[4]));
+  auto *steps = reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[3]));
+  auto *step_size = reinterpret_cast<double *>(STARPU_VARIABLE_GET_PTR(buffers[4]));
   auto local_particles_ptr = reinterpret_cast<Particle *>(STARPU_VECTOR_GET_PTR(buffers[6]));
   auto local_particles_size = STARPU_VECTOR_GET_NX(buffers[6]);
   auto total_blocks = local_particles_size / threads_per_block;
 
-  runParticles_gpu<<<total_blocks, threads_per_block>>>(coils, e_roof, length_segments, local_particles_ptr, local_particles_size, steps, step_size);
+  cudaStreamSynchronize(starpu_cuda_get_local_stream());
+  runParticles_gpu<<<total_blocks, threads_per_block, 0, starpu_cuda_get_local_stream()>>>(coils, e_roof, length_segments, local_particles_ptr, local_particles_size, steps, step_size);
+  cudaError_t status = cudaGetLastError();
+  if (status != cudaSuccess) STARPU_CUDA_REPORT_ERROR(status);
+  cudaStreamSynchronize(starpu_cuda_get_local_stream());
 }
 
 struct starpu_codelet codelet = {
   //.cpu_funcs = {run_particles_runner},
   .cuda_funcs = {run_particles_runner_gpu},
+  .cuda_flags = {STARPU_CUDA_ASYNC},
   .nbuffers = 7,
   .modes = {STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_RW}
 };
