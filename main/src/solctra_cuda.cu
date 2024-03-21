@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <solctra_cuda.cuh>
 
 __device__ inline auto norm_of_gpu(const Cartesian &vec) 
@@ -122,19 +123,16 @@ __device__ void compute_iteration(const Coils &coils, const Coils &e_roof,
 }
 
 __global__ void runParticles_gpu(Coils *coils, Coils *e_roof, LengthSegments *length_segments,
-                  Particle *particles, const size_t total_particles,
-                  const unsigned int *steps, const double *step_size)
+                  Particle *particles, const unsigned int *steps, const double *step_size)
 {
-  auto start = threadIdx.x;
-  auto end = start + total_particles;
+  auto i = blockIdx.x * blockDim.x + threadIdx.x;
+  //printf("tId: %d\n", i);
   for (auto step = 1u; step <= *steps; ++step) {
-    for (auto i = start; i < end; ++i) {
-      if ((particles[i].x == MINOR_RADIUS) && (particles[i].y == MINOR_RADIUS) &&
-          (particles[i].z == MINOR_RADIUS)) {
-        continue;
-      } else {
-        compute_iteration(*coils, *e_roof, *length_segments, particles[i], *step_size);
-      }
+    if ((particles[i].x == MINOR_RADIUS) && (particles[i].y == MINOR_RADIUS) &&
+        (particles[i].z == MINOR_RADIUS)) {
+      continue;
+    } else {
+      compute_iteration(*coils, *e_roof, *length_segments, particles[i], *step_size);
     }
   }
 }

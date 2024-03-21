@@ -213,11 +213,13 @@ void run_particles_runner_gpu(void *buffers[], void *cl_arg)
   auto local_particles_size = STARPU_VECTOR_GET_NX(buffers[6]);
   auto total_blocks = local_particles_size / threads_per_block;
 
+  std::cout << local_particles_size << '\t' << total_blocks << '\t' << threads_per_block << '\n';
   cudaStreamSynchronize(starpu_cuda_get_local_stream());
-  runParticles_gpu<<<total_blocks, threads_per_block, 0, starpu_cuda_get_local_stream()>>>(coils, e_roof, length_segments, local_particles_ptr, local_particles_size, steps, step_size);
-  cudaError_t status = cudaGetLastError();
-  if (status != cudaSuccess) STARPU_CUDA_REPORT_ERROR(status);
-  cudaStreamSynchronize(starpu_cuda_get_local_stream());
+  runParticles_gpu<<<total_blocks, threads_per_block, 0, starpu_cuda_get_local_stream()>>>(coils, e_roof, length_segments, local_particles_ptr, steps, step_size);
+  cudaError_t err = cudaGetLastError();
+  if(err != cudaSuccess) STARPU_CUDA_REPORT_ERROR(err);
+  err = cudaStreamSynchronize(starpu_cuda_get_local_stream());
+  if(err != cudaSuccess) STARPU_CUDA_REPORT_ERROR(err);
 }
 
 struct starpu_codelet codelet = {
@@ -341,12 +343,12 @@ int main(int argc, char **argv) {
                 << std::endl;
     }
     std::cout << "Particles initialized\n";
-    // groupMyShare = initialize_shares_uniform(comm_size, length);
-    groupMyShare = initialize_shares_binomial(comm_size, length);
+    groupMyShare = initialize_shares_uniform(comm_size, length);
+    // groupMyShare = initialize_shares_binomial(comm_size, length);
     for (unsigned int i = 1; i < comm_size; i++) {
       displacements[i] = displacements[i - 1] + groupMyShare[i - 1];
     }
-    // printIterationFileTxt(particles, 0, 0, output);
+    printIterationFileTxt(particles, 0, 0, output);
   }
 
   MPI_Bcast(groupMyShare.data(), groupMyShare.size(), MPI_INT, 0, MPI_COMM_WORLD);
@@ -427,6 +429,8 @@ int main(int argc, char **argv) {
     std::cout << "Executing simulation" << std::endl;
   }
 
+  starpu_mpi_barrier(MPI_COMM_WORLD);
+
   for(unsigned int i = 0; i < comm_size; ++i)
   {
     starpu_mpi_data_register(particles_handles[i], (i + 1) * 100, 0);
@@ -444,7 +448,18 @@ int main(int argc, char **argv) {
   }
 
   starpu_mpi_wait_for_all(MPI_COMM_WORLD);
+  starpu_data_unregister(coils_handle);
+  starpu_data_unregister(e_roof_handle);
+  starpu_data_unregister(length_segments_handle);
+  starpu_data_unregister(steps_handle);
+  starpu_data_unregister(step_size_handle);
+  starpu_data_unregister(mode_handle);
+  for(unsigned int i = 0; i < comm_size; ++i)
+  {
+    starpu_data_unregister(particles_handles[i]);
+  }
 
+  printIterationFileTxt(particles, steps, my_rank, output);
   if (my_rank == 0) {
     endTime = MPI_Wtime();
     std::cout << "Simulation finished" << std::endl;
