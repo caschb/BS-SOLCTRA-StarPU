@@ -1,16 +1,14 @@
 #include <cstdio>
 #include <solctra_cuda.cuh>
 
-__device__ inline auto norm_of_gpu(const Cartesian &vec) 
-{
+__device__ inline auto norm_of_gpu(const Cartesian &vec) {
   return std::sqrt((vec.x * vec.x) + (vec.y * vec.y) + (vec.z * vec.z));
 }
 
 __device__ void compute_magnetic_field(const Coils &coils, const Coils &e_roof,
-                               Coils &rmi, Coils &rmf,
-                               const LengthSegments &length_segments,
-                               const Particle &point, Cartesian &B) 
-{
+                                       Coils &rmi, Coils &rmf,
+                                       const LengthSegments &length_segments,
+                                       const Particle &point, Cartesian &B) {
   static const auto multiplier = (MIU * I) / (4.0 * PI);
 
   for (auto i = 0; i < TOTAL_OF_COILS; ++i) {
@@ -48,9 +46,9 @@ __device__ void compute_magnetic_field(const Coils &coils, const Coils &e_roof,
 }
 
 __device__ void compute_iteration(const Coils &coils, const Coils &e_roof,
-                      const LengthSegments &length_segments,
-                      Particle &start_point, const double step_size)
-{
+                                  const LengthSegments &length_segments,
+                                  Particle &start_point,
+                                  const double step_size) {
   Particle p1;
   Particle p2;
   Particle p3;
@@ -68,8 +66,8 @@ __device__ void compute_iteration(const Coils &coils, const Coils &e_roof,
   Coils rmf;
 
   constexpr auto half = 1.0 / 2.0;
-  compute_magnetic_field(coils, e_roof, rmi, rmf, length_segments,
-                            start_point, k1);
+  compute_magnetic_field(coils, e_roof, rmi, rmf, length_segments, start_point,
+                         k1);
   auto norm_temp = 1.0 / norm_of_gpu(k1);
   k1.x = (k1.x * norm_temp) * step_size;
   k1.y = (k1.y * norm_temp) * step_size;
@@ -114,25 +112,26 @@ __device__ void compute_iteration(const Coils &coils, const Coils &e_roof,
   r_vector.y = start_point.y - zero_vect.y;
   r_vector.z = start_point.z - zero_vect.z;
   auto r_radius = norm_of_gpu(r_vector);
-  if (r_radius > MINOR_RADIUS) 
-  {
+  if (r_radius > MINOR_RADIUS) {
     start_point.x = MINOR_RADIUS;
     start_point.y = MINOR_RADIUS;
     start_point.z = MINOR_RADIUS;
   }
 }
 
-__global__ void runParticles_gpu(Coils *coils, Coils *e_roof, LengthSegments *length_segments,
-                  Particle *particles, const unsigned int *steps, const double *step_size)
-{
+__global__ void runParticles_gpu(Coils *coils, Coils *e_roof,
+                                 LengthSegments *length_segments,
+                                 Particle *particles, const unsigned int *steps,
+                                 const double *step_size) {
   auto i = blockIdx.x * blockDim.x + threadIdx.x;
-  //printf("tId: %d\n", i);
+  // printf("tId: %d\n", i);
   for (auto step = 1u; step <= *steps; ++step) {
     if ((particles[i].x == MINOR_RADIUS) && (particles[i].y == MINOR_RADIUS) &&
         (particles[i].z == MINOR_RADIUS)) {
       continue;
     } else {
-      compute_iteration(*coils, *e_roof, *length_segments, particles[i], *step_size);
+      compute_iteration(*coils, *e_roof, *length_segments, particles[i],
+                        *step_size);
     }
   }
 }

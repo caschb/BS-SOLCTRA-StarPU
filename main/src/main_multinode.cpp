@@ -1,7 +1,9 @@
+#include <argument_parsers.h>
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <gpu_functions.h>
 #include <iostream>
 #include <mpi.h>
 #include <ostream>
@@ -11,9 +13,6 @@
 #include <string>
 #include <utils.h>
 #include <vector>
-#include <solctra_cuda.cuh>
-#include <argument_parsers.h>
-#include <gpu_functions.h>
 
 std::vector<int> initialize_shares_uniform(const unsigned int comm_size,
                                            const unsigned int length) {
@@ -46,38 +45,41 @@ std::vector<int> initialize_shares_binomial(const unsigned int comm_size,
   return groupMyShare;
 }
 
-
-void run_particles_runner(void *buffers[], void *cl_arg)
-{
-  (void) cl_arg;
+void run_particles_runner(void *buffers[], void *cl_arg) {
+  (void)cl_arg;
   auto coils = reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[0]));
   auto e_roof = reinterpret_cast<Coils *>(STARPU_VARIABLE_GET_PTR(buffers[1]));
-  auto length_segments = reinterpret_cast<LengthSegments *>(STARPU_VARIABLE_GET_PTR(buffers[2]));
-  auto steps = reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[3]));
-  auto step_size = reinterpret_cast<double *>(STARPU_VARIABLE_GET_PTR(buffers[4]));
-  auto mode = reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[5]));
-  auto local_particles_ptr = reinterpret_cast<Particle *>(STARPU_VECTOR_GET_PTR(buffers[6]));
+  auto length_segments =
+      reinterpret_cast<LengthSegments *>(STARPU_VARIABLE_GET_PTR(buffers[2]));
+  auto steps =
+      reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[3]));
+  auto step_size =
+      reinterpret_cast<double *>(STARPU_VARIABLE_GET_PTR(buffers[4]));
+  auto mode =
+      reinterpret_cast<unsigned int *>(STARPU_VARIABLE_GET_PTR(buffers[5]));
+  auto local_particles_ptr =
+      reinterpret_cast<Particle *>(STARPU_VECTOR_GET_PTR(buffers[6]));
   auto local_particles_size = STARPU_VECTOR_GET_NX(buffers[6]);
-  auto local_particles = std::vector<Particle>(local_particles_ptr, local_particles_ptr + local_particles_size);
+  auto local_particles = std::vector<Particle>(
+      local_particles_ptr, local_particles_ptr + local_particles_size);
   int my_rank = 0;
   starpu_mpi_comm_rank(MPI_COMM_WORLD, &my_rank);
   runParticles(*coils, *e_roof, *length_segments, local_particles, *steps,
                *step_size, *mode, my_rank);
 }
 
-
-struct starpu_codelet codelet = {
-  //.cpu_funcs = {run_particles_runner},
-  .cuda_funcs = {run_particles_runner_gpu},
-  .cuda_flags = {STARPU_CUDA_ASYNC},
-  .nbuffers = 7,
-  .modes = {STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_R, STARPU_RW}
-};
+struct starpu_codelet codelet = {.cpu_funcs = {run_particles_runner},
+                                 .cuda_funcs = {run_particles_runner_gpu},
+                                 .cuda_flags = {STARPU_CUDA_ASYNC},
+                                 .nbuffers = 7,
+                                 .modes = {STARPU_R, STARPU_R, STARPU_R,
+                                           STARPU_R, STARPU_R, STARPU_R,
+                                           STARPU_RW}};
 
 int main(int argc, char **argv) {
   /*****MPI variable declarations and initializations**********/
   int ret = starpu_mpi_init_conf(&argc, &argv, 1, MPI_COMM_WORLD, nullptr);
-	STARPU_CHECK_RETURN_VALUE(ret, "starpu_mpi_init_conf");
+  STARPU_CHECK_RETURN_VALUE(ret, "starpu_mpi_init_conf");
 
   auto my_rank = 0u;
   auto comm_size = 0u;
@@ -195,27 +197,28 @@ int main(int argc, char **argv) {
     printIterationFileTxt(particles, 0, 0, output);
   }
 
-  MPI_Bcast(groupMyShare.data(), groupMyShare.size(), MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(groupMyShare.data(), groupMyShare.size(), MPI_INT, 0,
+            MPI_COMM_WORLD);
 
   starpu_data_handle_t particles_handle;
 
-  if(my_rank == 0)
-  {
-    starpu_vector_data_register(&particles_handle, STARPU_MAIN_RAM, (uintptr_t)particles.data(), particles.size(), sizeof(Particle));
-  }
-  else
-  {
-    starpu_vector_data_register(&particles_handle, -1, (uintptr_t)nullptr, length, sizeof(Particle));
+  if (my_rank == 0) {
+    starpu_vector_data_register(&particles_handle, STARPU_MAIN_RAM,
+                                (uintptr_t)particles.data(), particles.size(),
+                                sizeof(Particle));
+  } else {
+    starpu_vector_data_register(&particles_handle, -1, (uintptr_t) nullptr,
+                                length, sizeof(Particle));
   }
 
   struct starpu_data_filter particles_filter = {
-    .filter_func = starpu_vector_filter_list,
-    .nchildren = comm_size,
-    .filter_arg_ptr = groupMyShare.data()
-  };
+      .filter_func = starpu_vector_filter_list,
+      .nchildren = comm_size,
+      .filter_arg_ptr = groupMyShare.data()};
 
   starpu_data_handle_t *particles_handles = new starpu_data_handle_t[comm_size];
-  starpu_data_partition_plan(particles_handle, &particles_filter, particles_handles);
+  starpu_data_partition_plan(particles_handle, &particles_filter,
+                             particles_handles);
   starpu_data_partition_submit(particles_handle, comm_size, particles_handles);
 
   Coils coils;
@@ -224,11 +227,10 @@ int main(int argc, char **argv) {
   if (my_rank == 0) {
     loadCoilData(coils, resource_path);
     computeERoof(coils, e_roof, length_segments);
-    if(magprof != 0)
-    {
+    if (magprof != 0) {
       std::cout << "Computing magnetic profiles" << std::endl;
       computeMagneticProfile(coils, e_roof, length_segments, num_points,
-                            phi_angle, dimension);
+                             phi_angle, dimension);
     }
   }
   starpu_data_handle_t coils_handle;
@@ -238,23 +240,33 @@ int main(int argc, char **argv) {
   starpu_data_handle_t step_size_handle;
   starpu_data_handle_t mode_handle;
 
-  if(my_rank == 0)
-  {
-    starpu_variable_data_register(&coils_handle, STARPU_MAIN_RAM, (uintptr_t)&coils, sizeof(coils));
-    starpu_variable_data_register(&e_roof_handle, STARPU_MAIN_RAM, (uintptr_t)&e_roof_handle, sizeof(e_roof));
-    starpu_variable_data_register(&length_segments_handle, STARPU_MAIN_RAM, (uintptr_t)&length_segments, sizeof(length_segments));
-    starpu_variable_data_register(&steps_handle, STARPU_MAIN_RAM, (uintptr_t)&steps, sizeof(steps));
-    starpu_variable_data_register(&step_size_handle, STARPU_MAIN_RAM, (uintptr_t)&step_size, sizeof(step_size));
-    starpu_variable_data_register(&mode_handle, STARPU_MAIN_RAM, (uintptr_t)&mode, sizeof(mode));
-  }
-  else
-  {
-    starpu_variable_data_register(&coils_handle, -1, (uintptr_t)nullptr, sizeof(coils));
-    starpu_variable_data_register(&e_roof_handle, -1, (uintptr_t)nullptr, sizeof(e_roof));
-    starpu_variable_data_register(&length_segments_handle, -1, (uintptr_t)nullptr, sizeof(length_segments));
-    starpu_variable_data_register(&steps_handle, -1, (uintptr_t)nullptr, sizeof(steps));
-    starpu_variable_data_register(&step_size_handle, -1, (uintptr_t)nullptr, sizeof(step_size));
-    starpu_variable_data_register(&mode_handle, -1, (uintptr_t)nullptr, sizeof(mode));
+  if (my_rank == 0) {
+    starpu_variable_data_register(&coils_handle, STARPU_MAIN_RAM,
+                                  (uintptr_t)&coils, sizeof(coils));
+    starpu_variable_data_register(&e_roof_handle, STARPU_MAIN_RAM,
+                                  (uintptr_t)&e_roof_handle, sizeof(e_roof));
+    starpu_variable_data_register(&length_segments_handle, STARPU_MAIN_RAM,
+                                  (uintptr_t)&length_segments,
+                                  sizeof(length_segments));
+    starpu_variable_data_register(&steps_handle, STARPU_MAIN_RAM,
+                                  (uintptr_t)&steps, sizeof(steps));
+    starpu_variable_data_register(&step_size_handle, STARPU_MAIN_RAM,
+                                  (uintptr_t)&step_size, sizeof(step_size));
+    starpu_variable_data_register(&mode_handle, STARPU_MAIN_RAM,
+                                  (uintptr_t)&mode, sizeof(mode));
+  } else {
+    starpu_variable_data_register(&coils_handle, -1, (uintptr_t) nullptr,
+                                  sizeof(coils));
+    starpu_variable_data_register(&e_roof_handle, -1, (uintptr_t) nullptr,
+                                  sizeof(e_roof));
+    starpu_variable_data_register(&length_segments_handle, -1,
+                                  (uintptr_t) nullptr, sizeof(length_segments));
+    starpu_variable_data_register(&steps_handle, -1, (uintptr_t) nullptr,
+                                  sizeof(steps));
+    starpu_variable_data_register(&step_size_handle, -1, (uintptr_t) nullptr,
+                                  sizeof(step_size));
+    starpu_variable_data_register(&mode_handle, -1, (uintptr_t) nullptr,
+                                  sizeof(mode));
   }
 
   starpu_mpi_data_register(coils_handle, 1, 0);
@@ -275,19 +287,13 @@ int main(int argc, char **argv) {
 
   starpu_mpi_barrier(MPI_COMM_WORLD);
 
-  for(unsigned int i = 0; i < comm_size; ++i)
-  {
+  for (unsigned int i = 0; i < comm_size; ++i) {
     starpu_mpi_data_register(particles_handles[i], (i + 1) * 100, 0);
-    ret = starpu_mpi_task_insert(MPI_COMM_WORLD, &codelet,
-        STARPU_R, coils_handle,
-        STARPU_R, e_roof_handle,
-        STARPU_R, length_segments_handle,
-        STARPU_R, steps_handle,
-        STARPU_R, step_size_handle,
-        STARPU_R, mode_handle,
-        STARPU_RW, particles_handles[i], 
-        STARPU_EXECUTE_ON_NODE, i,
-        0);
+    ret = starpu_mpi_task_insert(
+        MPI_COMM_WORLD, &codelet, STARPU_R, coils_handle, STARPU_R,
+        e_roof_handle, STARPU_R, length_segments_handle, STARPU_R, steps_handle,
+        STARPU_R, step_size_handle, STARPU_R, mode_handle, STARPU_RW,
+        particles_handles[i], STARPU_EXECUTE_ON_NODE, i, 0);
     STARPU_CHECK_RETURN_VALUE(ret, "starpu_mpi_task_insert");
   }
 
@@ -298,8 +304,7 @@ int main(int argc, char **argv) {
   starpu_data_unregister(steps_handle);
   starpu_data_unregister(step_size_handle);
   starpu_data_unregister(mode_handle);
-  for(unsigned int i = 0; i < comm_size; ++i)
-  {
+  for (unsigned int i = 0; i < comm_size; ++i) {
     starpu_data_unregister(particles_handles[i]);
   }
 
@@ -326,7 +331,7 @@ int main(int argc, char **argv) {
 
     std::cout << "Timestamp: " << dt << std::endl;
   }
-  delete [] particles_handles;
+  delete[] particles_handles;
 
   starpu_mpi_shutdown();
   return 0;
