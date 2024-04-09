@@ -63,6 +63,7 @@ void run_particles_runner(void *buffers[], void *cl_arg) {
   auto local_particles = std::vector<Particle>(
       local_particles_ptr, local_particles_ptr + local_particles_size);
   int my_rank = 0;
+  std::cout << "CPU Function\n";
   starpu_mpi_comm_rank(MPI_COMM_WORLD, &my_rank);
   runParticles(*coils, *e_roof, *length_segments, local_particles, *steps,
                *step_size, *mode, my_rank);
@@ -172,6 +173,7 @@ int main(int argc, char **argv) {
 
   double startInitializationTime = 0.0;
   double endInitializationTime = 0.0;
+  int total_shares = comm_size * 5;
   std::vector<int> displacements(comm_size);
   std::vector<int> groupMyShare(comm_size);
 

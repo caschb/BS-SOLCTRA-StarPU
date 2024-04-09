@@ -1,4 +1,5 @@
 #include <gpu_functions.h>
+#include <iostream>
 #include <solctra_cuda.cuh>
 #include <starpu.h>
 #include <utils.h>
@@ -18,8 +19,7 @@ void run_particles_runner_gpu(void *buffers[], void *cl_arg) {
   auto local_particles_size = STARPU_VECTOR_GET_NX(buffers[6]);
   auto total_blocks = local_particles_size / threads_per_block;
 
-  std::cout << local_particles_size << '\t' << total_blocks << '\t'
-            << threads_per_block << '\n';
+  std::cout << "GPU Function\n";
   cudaStreamSynchronize(starpu_cuda_get_local_stream());
   runParticles_gpu<<<total_blocks, threads_per_block, 0,
                      starpu_cuda_get_local_stream()>>>(
