@@ -3,22 +3,16 @@
 // Created by lchavarr on 4/19/16.
 //
 
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdlib>
-#include <fstream>
+#include <math.h>
 #include <mpi.h>
-#include <random>
-#include <sstream>
-#include <string>
+#include <stddef.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <utils.h>
-#include <vector>
 
-void loadParticleFile(Particles &particles, const int numberOfParticles,
-                      const std::string_view path) {
+void loadParticleFile(Particle *particles, const int numberOfParticles,
+                      const char *path) {
   static const auto delimeter = "\t";
   std::ifstream particles_file(path.data());
   std::string line;

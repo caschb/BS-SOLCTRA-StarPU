@@ -7,52 +7,37 @@
 #ifndef SOLCTRA_UTILS_H
 #define SOLCTRA_UTILS_H
 
-#include <array>
-#include <cmath>
-#include <iostream>
+#include <math.h>
 #include <mpi.h>
-#include <numbers>
-#include <string>
-#include <string_view>
-#include <vector>
 
 struct Cartesian {
   double x{0.0}, y{0.0}, z{0.0};
-  void print() { std::cout << x << ',' << y << ',' << z << '\n'; }
-  Cartesian() = default;
-  Cartesian(double x_e, double y_e, double z_e) : x(x_e), y(y_e), z(z_e) {}
-  friend std::ostream &operator<<(std::ostream &os,
-                                  const Cartesian &cartesian) {
-    os << cartesian.x << ',' << cartesian.y << ',' << cartesian.z;
-    return os;
-  }
 };
 
-constexpr auto PI = std::numbers::pi;
-constexpr auto MIU = 1.2566e-06;
-constexpr auto I = -4350;
-constexpr auto MINOR_RADIUS = 0.0944165;
-constexpr auto MAJOR_RADIUS = 0.2381;
-constexpr auto TOTAL_OF_GRADES = 360;
-constexpr auto TOTAL_OF_COILS = 12;
-constexpr auto threads_per_block = 256;
+const double PI = 3.141592653589793;
+const double MIU = 1.2566e-06;
+const int I = -4350;
+const double MINOR_RADIUS = 0.0944165;
+const double MAJOR_RADIUS = 0.2381;
+const unsigned int TOTAL_OF_GRADES = 360;
+const unsigned int TOTAL_OF_COILS = 12;
+const unsigned int threads_per_block = 256;
+const size_t BUFFER_SIZE = 256;
 
-using Coil = std::array<Cartesian, TOTAL_OF_GRADES + 1>;
-using Coils = std::array<Coil, TOTAL_OF_COILS>;
-using LengthSegments =
-    std::array<std::array<double, TOTAL_OF_GRADES>, TOTAL_OF_COILS>;
-using Particle = Cartesian;
-using Particles = std::vector<Particle>;
+typedef Cartesian Coil[TOTAL_OF_GRADES + 1];
+typedef Coil Coils[TOTAL_OF_COILS];
+typedef double LengthSegments[TOTAL_OF_COILS][TOTAL_OF_GRADES];
+typedef Cartesian Particle;
 
 MPI_Datatype setupMPICartesianType();
 MPI_Datatype setupMPIArray(MPI_Datatype base_type, int count);
 
-void initializeParticles(Particles &particles, const int seedValue);
+void initializeParticles(Cartesian *particles, const int seedValue);
 
-void loadParticleFile(Particles &particles, const int numberOfParticles,
-                      const std::string_view path);
+void loadParticleFile(Cartesian *particles, const int numberOfParticles,
+                      const char *path);
 
-void loadCoilData(Coils &coil, const std::string_view path);
+void loadCoilData(Coils &coil, const char *path);
 
 void computeERoof(Coils &coils, Coils &e_roof, LengthSegments &length_segments);
 
@@ -67,12 +52,12 @@ Cartesian computeMagneticField(const Coils &coils, const Coils &e_roof,
                                const Particle &point);
 
 auto getCurrentTime();
-void createDirectoryIfNotExists(const std::string &path);
-bool directoryExists(const std::string &path);
+void createDirectoryIfNotExists(const char *path);
+bool directoryExists(const char *path);
 auto getZeroPadded(const int num);
 double randomGenerator(const double min, const double max, const int seedValue);
 inline auto norm_of(const Cartesian &vec) {
-  return std::sqrt((vec.x * vec.x) + (vec.y * vec.y) + (vec.z * vec.z));
+  return sqrt((vec.x * vec.x) + (vec.y * vec.y) + (vec.z * vec.z));
 }
 
 #endif
