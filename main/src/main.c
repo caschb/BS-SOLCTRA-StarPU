@@ -78,6 +78,8 @@ int main(int argc, char **argv) {
 
     create_directory(output);
   }
+  double start_loading_particles_time = 0.0;
+  start_loading_particles_time = MPI_Wtime();
   int total_shares = comm_size * 5;
 
   int *displacements = malloc(comm_size * sizeof(int));
@@ -86,11 +88,7 @@ int main(int argc, char **argv) {
   Particle *particles;
   starpu_malloc((void **)&particles, number_of_particles);
   if (my_rank == 0) {
-    double start_loading_particles_time = 0.0;
-    start_loading_particles_time = MPI_Wtime();
     load_particles(argc, argv, particles, number_of_particles, 0);
-    printf("Initialization time: %f\n",
-           MPI_Wtime() - start_loading_particles_time);
     printf("Particles initialized\n");
     initialize_shares_uniform(comm_size, number_of_particles, group_my_share);
     for (unsigned int i = 1; i < comm_size; i++) {
@@ -182,15 +180,6 @@ int main(int argc, char **argv) {
   starpu_mpi_data_register(step_size_handle, 5, 0);
   starpu_mpi_data_register(mode_handle, 6, 0);
 
-  double startTime = 0.;
-  double endTime = 0.;
-  if (my_rank == 0) {
-    startTime = MPI_Wtime();
-    printf("Executing simulation\n");
-  }
-
-  starpu_mpi_barrier(MPI_COMM_WORLD);
-
   struct starpu_codelet codelet = {.cpu_funcs = {cpu_simulation_runner},
                                    // .cuda_funcs = {run_particles_runner_gpu},
                                    // .cuda_flags = {STARPU_CUDA_ASYNC},
@@ -198,6 +187,16 @@ int main(int argc, char **argv) {
                                    .modes = {STARPU_R, STARPU_R, STARPU_R,
                                              STARPU_R, STARPU_R, STARPU_R,
                                              STARPU_RW}};
+  starpu_mpi_barrier(MPI_COMM_WORLD);
+
+  double startTime = 0.;
+  double endTime = 0.;
+  if (my_rank == 0) {
+    printf("Initialization time: %f\n",
+           MPI_Wtime() - start_loading_particles_time);
+    startTime = MPI_Wtime();
+    printf("Executing simulation\n");
+  }
 
   for (unsigned int i = 0; i < comm_size; ++i) {
     starpu_mpi_data_register(particles_handles[i], (i + 1) * 100, 0);

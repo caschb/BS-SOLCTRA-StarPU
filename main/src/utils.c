@@ -166,7 +166,7 @@ Cartesian compute_magnetic_field(const Coils coils, const Coils e_roof,
                                  Coils rmi, Coils rmf,
                                  const LengthSegments length_segments,
                                  const Particle point) {
-  const double multiplier = (MIU * I) / (4.0 * PI);
+  static const double multiplier = (MIU * I) / (4.0 * PI);
   Cartesian B;
 
   for (int i = 0; i < TOTAL_OF_COILS; ++i) {
