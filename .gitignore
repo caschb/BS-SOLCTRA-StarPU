@@ -1,4 +1,5 @@
 results*
+job*
 build/*
 .vscode/*
 stdout*

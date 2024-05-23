@@ -4,13 +4,28 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=72
 #SBATCH --time=0:15:00
-#SBATCH -o stdout.%j
-#SBATCH -e stderr.%j
+#SBATCH -o job_%j.out
+#SBATCH -e job_%j.err
 #SBATCH --exclusive
 #SBATCH --partition=small
 
 export ID=${SLURM_JOB_ID}
+export STARPU_SCHED=dmda
+export STARPU_RESERVE_NCPU=1
+export STARPU_WORKERS_GET_BIND=0
 
-mpiexec -n 2 ../build/main/bs_solctra -length 1024 -id $ID -resource ../data/resources/ -steps 100 -mode 1 -magnetic_prof 0 100 0 2 -print_type 1
-######################################################################
+if [ ! -d "./results_${ID}" ]; then
+  mkdir "./results_${ID}"
+fi
+
+mpiexec -np 2\
+    ../build/main/bs_solctra\
+    --total-particles 1024\
+    --particles ../data/input_big.txt\
+    --job-id $ID\
+    --resource-path ../data/resources\
+    --steps 1000\
+    --mode 1\
+    --debug 1\
+    --magnetic_prof 0 100 0 2
 

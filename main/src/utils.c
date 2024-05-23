@@ -14,12 +14,16 @@ void print_particles(const Particle *particles, const int number_of_particles) {
 
 void create_directory(const char *path) {
   struct stat dirinfo;
+  printf("Creating directory: %s\n", path);
   if (stat(path, &dirinfo) != 0) {
     if (dirinfo.st_mode & S_IFDIR) {
       if (mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) {
         fprintf(stderr, "%s: Problem creating directory: %s\n", strerror(errno),
                 path);
       }
+    } else {
+        fprintf(stderr, "%s: Problem creating directory: %s\n", strerror(errno),
+                path);
     }
   } else {
     printf("Directory %s already exists!\n", path);
