@@ -22,8 +22,8 @@ void create_directory(const char *path) {
                 path);
       }
     } else {
-        fprintf(stderr, "%s: Problem creating directory: %s\n", strerror(errno),
-                path);
+      fprintf(stderr, "%s: Problem creating directory: %s\n", strerror(errno),
+              path);
     }
   } else {
     printf("Directory %s already exists!\n", path);

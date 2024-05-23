@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
     starpu_variable_data_register(&coils_handle, STARPU_MAIN_RAM,
                                   (uintptr_t)&coils, sizeof(coils));
     starpu_variable_data_register(&e_roof_handle, STARPU_MAIN_RAM,
-                                  (uintptr_t)&e_roof_handle, sizeof(e_roof));
+                                  (uintptr_t)&e_roof, sizeof(e_roof));
     starpu_variable_data_register(&length_segments_handle, STARPU_MAIN_RAM,
                                   (uintptr_t)&length_segments,
                                   sizeof(length_segments));

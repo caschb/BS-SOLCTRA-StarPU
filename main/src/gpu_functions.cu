@@ -1,7 +1,7 @@
 #include <constants.h>
 #include <gpu_functions.h>
 #include <solctra_cuda.cuh>
-#include <starpu.h>
+#include <starpu_mpi.h>
 #include <utils.h>
 
 void gpu_simulation_runner(void *buffers[], void *cl_arg) {
@@ -16,7 +16,10 @@ void gpu_simulation_runner(void *buffers[], void *cl_arg) {
   int local_particles_size = STARPU_VECTOR_GET_NX(buffers[6]);
   int total_blocks = local_particles_size / THREADS_PER_BLOCK;
 
+  int my_rank = 0;
+  starpu_mpi_comm_rank(MPI_COMM_WORLD, &my_rank);
   printf("GPU Function\n");
+  double start_time = MPI_Wtime();
   cudaError_t err = cudaStreamSynchronize(starpu_cuda_get_local_stream());
   if (err != cudaSuccess)
     STARPU_CUDA_REPORT_ERROR(err);
@@ -29,4 +32,5 @@ void gpu_simulation_runner(void *buffers[], void *cl_arg) {
   err = cudaStreamSynchronize(starpu_cuda_get_local_stream());
   if (err != cudaSuccess)
     STARPU_CUDA_REPORT_ERROR(err);
+  printf("Time on rank %d: %f\n", my_rank, MPI_Wtime() - start_time);
 }

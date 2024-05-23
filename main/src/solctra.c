@@ -1,5 +1,6 @@
 #include <solctra.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <utils.h>
 
 bool compute_iteration(const Coils coils, const Coils e_roof,
@@ -85,7 +86,7 @@ void run_particles(Coils coils, Coils e_roof, LengthSegments length_segments,
                    Particle *particles, const int total_particles,
                    const unsigned int steps, const double step_size,
                    const unsigned int mode, const unsigned int id) {
-  for (unsigned int step = 1; step <= steps; ++step) {
+  for (unsigned int step = 0; step < steps; ++step) {
 #pragma omp parallel for
     for (int i = 0; i < total_particles; ++i) {
       if ((particles[i].x != MINOR_RADIUS) ||

@@ -18,6 +18,8 @@ void cpu_simulation_runner(void *buffers[], void *cl_arg) {
   int my_rank = 0;
   printf("CPU Function\n");
   starpu_mpi_comm_rank(MPI_COMM_WORLD, &my_rank);
+  double start_time = MPI_Wtime();
   run_particles(*coils, *e_roof, *length_segments, particles, total_particles,
                 *steps, *step_size, *mode, my_rank);
+  printf("Time on rank %d: %f\n", my_rank, MPI_Wtime() - start_time);
 }
