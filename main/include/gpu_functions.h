@@ -1,1 +1,11 @@
-void run_particles_runner_gpu(void *buffers[], void *cl_arg);
+#pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void gpu_simulation_runner(void *buffers[], void *cl_arg);
+
+#ifdef __cplusplus
+}
+#endif

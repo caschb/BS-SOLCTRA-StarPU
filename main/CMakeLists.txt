@@ -1,8 +1,14 @@
 set(EXECUTABLE_TARGET bs_solctra)
 
-# add_executable(${EXECUTABLE_TARGET} src/main_multinode.cpp src/solctra_multinode.cpp src/utils.cpp 
-#   src/solctra_cuda.cu src/argument_parsers.cpp src/gpu_functions.cu)
-add_executable(${EXECUTABLE_TARGET} src/main.c src/argument_parsers.c src/utils.c src/cpu_functions.c src/solctra.c)
+if(USE_GPU)
+add_executable(${EXECUTABLE_TARGET} src/main.c src/argument_parsers.c src/utils.c 
+    src/cpu_functions.c src/gpu_functions.cu src/solctra.c src/solctra_cuda.cu)
+target_compile_definitions(${EXECUTABLE_TARGET} PRIVATE USE_GPU=${USE_GPU})
+else()
+add_executable(${EXECUTABLE_TARGET} src/main.c src/argument_parsers.c src/utils.c 
+    src/cpu_functions.c src/solctra.c)
+endif()
+
 target_include_directories(${EXECUTABLE_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 find_package(MPI REQUIRED)

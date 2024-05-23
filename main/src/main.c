@@ -1,6 +1,9 @@
 #include <argument_parsers.h>
 #include <constants.h>
 #include <cpu_functions.h>
+#ifdef USE_GPU
+#include <gpu_functions.h>
+#endif
 #include <starpu_mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -86,7 +89,7 @@ int main(int argc, char **argv) {
   int *group_my_share = malloc(comm_size * sizeof(int));
 
   Particle *particles;
-  starpu_malloc((void **)&particles, number_of_particles);
+  starpu_malloc((void **)&particles, sizeof(Particle) * number_of_particles);
   if (my_rank == 0) {
     load_particles(argc, argv, particles, number_of_particles, 0);
     printf("Particles initialized\n");
@@ -124,6 +127,10 @@ int main(int argc, char **argv) {
   Coils coils;
   Coils e_roof;
   LengthSegments length_segments;
+
+  starpu_memory_pin((void *)coils, sizeof(coils));
+  starpu_memory_pin((void *)e_roof, sizeof(e_roof));
+  starpu_memory_pin((void *)length_segments, sizeof(length_segments));
 
   if (my_rank == 0) {
     char out[] = "dummy";
@@ -181,8 +188,10 @@ int main(int argc, char **argv) {
   starpu_mpi_data_register(mode_handle, 6, 0);
 
   struct starpu_codelet codelet = {.cpu_funcs = {cpu_simulation_runner},
-                                   // .cuda_funcs = {run_particles_runner_gpu},
-                                   // .cuda_flags = {STARPU_CUDA_ASYNC},
+#ifdef USE_GPU
+                                   .cuda_funcs = {gpu_simulation_runner},
+                                   .cuda_flags = {STARPU_CUDA_ASYNC},
+#endif
                                    .nbuffers = 7,
                                    .modes = {STARPU_R, STARPU_R, STARPU_R,
                                              STARPU_R, STARPU_R, STARPU_R,
@@ -232,6 +241,9 @@ int main(int argc, char **argv) {
     printf("Timestamp=%s\n", dt);
   }
 
+  starpu_memory_unpin((void *)coils, sizeof(coils));
+  starpu_memory_unpin((void *)e_roof, sizeof(e_roof));
+  starpu_memory_unpin((void *)length_segments, sizeof(length_segments));
   free(particles_handles);
   particles_handles = NULL;
   free(displacements);
